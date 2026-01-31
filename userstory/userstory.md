@@ -139,3 +139,54 @@ Given 录制已完成
 When 数据准备好保存时
 Then 系统将文件保存到本地目录
 With 适当的命名约定和文件格式
+
+### 需求16: 产测模式
+As a user
+I want to 进入产测模式
+So that 我可以连接PC端上位机进行数据采集和测试
+Given 魔杖已开机
+When 我按下特定按键组合进入产测模式时
+Then 紫色LED以2Hz频率闪烁
+And LCD屏幕显示产测模式界面
+And 系统启动WiFi热点或扫描可用WiFi网络
+
+### 需求17: WiFi连接
+As a user
+I want to 连接PC端上位机的WiFi
+So that 我可以建立数据传输通道
+Given 我在产测模式中
+When 我选择并连接到PC端上位机的WiFi热点时
+Then 系统建立WiFi连接
+And LCD屏幕显示连接状态
+And LED颜色变为白色常亮表示连接成功
+
+### 需求18: 陀螺仪数据实时上传
+As a user
+I want to 将收集到的陀螺仪数据通过WiFi上传到上位机
+So that 我可以在PC端实时查看和保存数据
+Given WiFi连接已建立
+When 陀螺仪采集到新的数据时
+Then 系统将四元组数据通过WiFi实时上传到上位机
+And 上位机接收并保存数据到本地文件
+And LCD屏幕显示数据传输状态
+
+### 需求19: 产测数据格式
+As a user
+I want to 上传的陀螺仪数据包含完整信息
+So that 我可以在上位机进行数据分析和模型训练
+Given 数据正在上传
+When 每条数据包发送时
+Then 数据包包含时间戳、加速度计数据、陀螺仪数据、四元组数据
+And 数据格式为JSON或二进制格式便于解析
+And 数据包包含校验和确保数据完整性
+
+### 需求20: 产测模式退出
+As a user
+I want to 退出产测模式
+So that 我可以返回正常使用模式
+Given 我在产测模式中
+When 我按下退出按键或断开WiFi连接时
+Then 系统停止数据上传
+And 断开WiFi连接
+And 返回主菜单或待机模式
+And LED恢复待机状态显示
