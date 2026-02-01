@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# SKiDL 临时文件和输出
+schematic/skidl/output/
+schematic/skidl/__pycache__/
+schematic/skidl/docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 项目特定
+*.7z
+
+# 硬件设计文档（本地生成）
+HardWare/docs/
