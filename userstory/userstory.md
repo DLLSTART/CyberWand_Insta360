@@ -8,7 +8,7 @@
 ### 主要硬件
 - **主控**: ESP32-S3-WROOM-1N16R8 (16MB Flash + 8MB PSRAM)
 - **传感器**: MPU6050 6轴运动传感器
-- **显示**: ST7789 1.8寸 TFT LCD (128x160)
+- **显示**: HS20S010B 2.0寸 TFT LCD模块 (240x320, 驱动芯片ST7789V2)
 - **存储**: MicroSD卡座
 - **音频输出**: DFPlayer Mini + 8Ω扬声器
 - **音频输入**: INMP441 I2S数字麦克风
