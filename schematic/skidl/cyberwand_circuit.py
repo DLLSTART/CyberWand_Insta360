@@ -144,22 +144,26 @@ gnd = Net('GND')
 # ============================================================
 # 3. USB Type-C (ESD+过流保护)
 # ============================================================
+# ★ 更新：使用16引脚Type-C连接器 (TYPE-C 16PIN 2MD(073))
+# 实际封装：左侧12引脚 + 右侧2个SHELL引脚
 
-usb_conn['VBUS_A4'] += vcc_5v
-usb_conn['VBUS_B4'] += vcc_5v
+# VBUS引脚（正反插时都会连接）
+usb_conn['VBUS1'] += vcc_5v    # Pin2: VBUS
+usb_conn['VBUS2'] += vcc_5v    # Pin11: VBUS
 
 ptc_fuse[1] += vcc_5v
 ptc_fuse[2] += vcc_5v_prot
 
-usb_conn['GND_A1'] += gnd
-usb_conn['GND_B1'] += gnd
-usb_conn['GND_A12'] += gnd
-usb_conn['GND_B12'] += gnd
-usb_conn['SHIELD'] += gnd
+# GND引脚（所有GND引脚都连接到系统GND）
+usb_conn['GND1'] += gnd         # Pin1: GND
+usb_conn['GND2'] += gnd         # Pin12: GND
+usb_conn['SHELL1'] += gnd       # Pin13: SHELL (金属外壳)
+usb_conn['SHELL2'] += gnd       # Pin14: SHELL (金属外壳)
 
-usb_conn['CC1'] += r_cc1[1]
+# CC配置通道（用于检测连接和方向）
+usb_conn['CC1'] += r_cc1[1]     # Pin4: CC1
 r_cc1[2] += gnd
-usb_conn['CC2'] += r_cc2[1]
+usb_conn['CC2'] += r_cc2[1]     # Pin10: CC2
 r_cc2[2] += gnd
 
 usb_esd['VBUS'] += vcc_5v_prot
@@ -170,10 +174,17 @@ usb_d_minus = Net('USB_DN')
 usb_dp_int = Net('USB_DP_INT')
 usb_dn_int = Net('USB_DN_INT')
 
-usb_conn['DP1'] += usb_d_plus
-usb_conn['DP2'] += usb_d_plus
-usb_conn['DN1'] += usb_d_minus
-usb_conn['DN2'] += usb_d_minus
+# USB 2.0数据引脚（正反插时都会连接）
+# A侧：DP1(Pin6), DN1(Pin7)
+# B侧：DP2(Pin8), DN2(Pin5)
+usb_conn['DP1'] += usb_d_plus   # Pin6: D+ (A侧)
+usb_conn['DP2'] += usb_d_plus   # Pin8: D+ (B侧)
+usb_conn['DN1'] += usb_d_minus  # Pin7: D- (A侧)
+usb_conn['DN2'] += usb_d_minus  # Pin5: D- (B侧)
+
+# SBU辅助信号（未使用，可悬空）
+# usb_conn['SBU1'] += ...  # Pin9: SBU1 (未使用)
+# usb_conn['SBU2'] += ...  # Pin3: SBU2 (未使用)
 
 r_usb_dp[1] += usb_d_plus
 r_usb_dp[2] += usb_dp_int
@@ -202,6 +213,7 @@ charger['GND'] += gnd             # Pin3
 charger['BAT'] += vcc_bat         # Pin5
 charger['CE'] += vcc_5v_prot      # Pin8
 charger['TEMP'] += gnd             # Pin1: TEMP接GND禁用温度监测
+charger['EP'] += gnd               # Pin9: EP散热焊盘连接到GND
 # ★ 数据手册: TEMP接GND禁用! 若接VCC, TEMP/VIN=100%>80%阈值, 充电永久暂停!
 
 charger['PROG'] += r_prog[1]      # Pin2: ICHG=1000/RPROG=500mA
@@ -314,9 +326,13 @@ c_imu_regout[2] += gnd
 # ============================================================
 # 7. LCD (SPI + 阻尼电阻)
 # ============================================================
+# ★ 更新：使用20引脚LCD，连接上排引脚（Pin1-10）
 
-lcd['VCC'] += vcc_3v3
-lcd['GND'] += gnd
+lcd['VCC'] += vcc_3v3      # Pin2: VCC (上排)
+lcd['GND'] += gnd          # Pin1: GND (上排)
+# 下排的VCC_B和GND_B也可以连接，但通常只连接上排即可
+lcd['VCC_B'] += vcc_3v3    # Pin11: VCC (下排，可选)
+lcd['GND_B'] += gnd        # Pin12: GND (下排，可选)
 
 spi_sck = Net('SPI_SCK')
 spi_mosi = Net('SPI_MOSI')
@@ -340,12 +356,14 @@ mcu['IO14'] += spi_cs_lcd
 mcu['IO11'] += lcd_dc
 mcu['IO17'] += lcd_rst
 
-lcd['SCL'] += spi_sck
-lcd['SDA'] += spi_mosi
-lcd['CS'] += spi_cs_lcd
-lcd['DC'] += lcd_dc
-lcd['RES'] += lcd_rst
-lcd['BLK'] += vcc_3v3
+# 连接上排引脚（Pin1-10）
+lcd['CLK'] += spi_sck      # Pin3: CLK (SPI时钟)
+lcd['SDA'] += spi_mosi     # Pin4: SDA (SPI数据)
+lcd['RES'] += lcd_rst      # Pin5: RES (复位)
+lcd['DC'] += lcd_dc        # Pin6: DC (数据/命令)
+lcd['CS1'] += spi_cs_lcd   # Pin7: CS1 (片选)
+lcd['BLK'] += vcc_3v3      # Pin8: BLK (背光控制)
+# Pin9(FS0) 和 Pin10(FCS) 未使用，可悬空
 
 c_lcd_1[1] += vcc_3v3
 c_lcd_1[2] += gnd
@@ -355,18 +373,28 @@ c_lcd_2[2] += gnd
 # ============================================================
 # 8. MicroSD (SPI共享)
 # ============================================================
+# ★ 更新：使用14引脚SD卡座 DM3AT-SF-PEJM5
 
-sd_card['VCC'] += vcc_3v3
-sd_card['GND'] += gnd
+sd_card['VDD'] += vcc_3v3  # Pin4: VDD (电源)
+sd_card['VSS'] += gnd      # Pin6: VSS (地)
 
 spi_cs_sd = Net('SPI_CS_SD')
-sd_card['SCK'] += spi_sck
-sd_card['MOSI'] += spi_mosi
-sd_card['MISO'] += spi_miso
-sd_card['CS'] += spi_cs_sd
+# SPI模式连接：
+# CMD(Pin3) → CS (片选)
+# CLK(Pin5) → SCK (时钟)
+# DAT0(Pin7) → MISO (主入从出)
+# DAT1(Pin8) → MOSI (主出从入)
+sd_card['CMD'] += spi_cs_sd    # Pin3: CMD (SPI模式下用作CS)
+sd_card['CLK'] += spi_sck      # Pin5: CLK (SPI时钟)
+sd_card['DAT0'] += spi_miso     # Pin7: DAT0 (SPI MISO)
+sd_card['DAT1'] += spi_mosi     # Pin8: DAT1 (SPI MOSI)
 mcu['IO10'] += spi_cs_sd
 
-sd_card['SHIELD'] += gnd
+# 卡检测（可选）
+# sd_card['CD_DAT3'] += ...     # Pin2: CD/DAT3 (卡检测)
+
+# 未使用的引脚
+# Pin1(DAT2), Pin8(DAT1), Pin9(SW_B), Pin10-14(NC) 未使用
 
 # ============================================================
 # 9. DFPlayer Mini (UART) ★ v2.2: 增加RX保护电阻
