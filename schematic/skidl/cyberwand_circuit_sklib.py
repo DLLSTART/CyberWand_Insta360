@@ -48,19 +48,19 @@ cyberwand_circuit = SchLib(tool=SKIDL).add_parts(*[
             Pin(num='37',name='TXD0',func=pin_types.BIDIR),
             Pin(num='38',name='IO2',func=pin_types.BIDIR),
             Pin(num='39',name='IO1',func=pin_types.BIDIR)] }),
-        Part(**{ 'name':'MPU-6050', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'MPU-6050'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Sensor_Motion:InvenSense_QFN-24_4x4mm_P0.5mm', 'keywords':None, 'description':'MPU6050 6-axis IMU', 'datasheet':None, 'pins':[
-            Pin(num='1',name='VCC',func=pin_types.PWRIN),
+        Part(**{ 'name':'MPU-6050', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'MPU-6050'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Sensor_Motion:InvenSense_QFN-24_4x4mm_P0.5mm', 'keywords':None, 'description':'MPU6050 6-axis IMU, QFN-24', 'datasheet':None, 'pins':[
+            Pin(num='13',name='VDD',func=pin_types.PWRIN),
             Pin(num='18',name='GND',func=pin_types.PWRIN),
-            Pin(num='13',name='VLOGIC',func=pin_types.PWRIN),
-            Pin(num='23',name='SDA',func=pin_types.BIDIR),
-            Pin(num='24',name='SCL',func=pin_types.INPUT),
+            Pin(num='8',name='VLOGIC',func=pin_types.PWRIN),
+            Pin(num='24',name='SDA',func=pin_types.BIDIR),
+            Pin(num='23',name='SCL',func=pin_types.INPUT),
             Pin(num='9',name='AD0',func=pin_types.INPUT),
             Pin(num='12',name='INT',func=pin_types.OUTPUT),
             Pin(num='6',name='AUX_DA',func=pin_types.BIDIR),
             Pin(num='7',name='AUX_CL',func=pin_types.BIDIR),
-            Pin(num='20',name='CLKIN',func=pin_types.INPUT),
-            Pin(num='22',name='CLKOUT',func=pin_types.OUTPUT),
-            Pin(num='3',name='CPOUT',func=pin_types.PASSIVE),
+            Pin(num='1',name='CLKIN',func=pin_types.INPUT),
+            Pin(num='11',name='FSYNC',func=pin_types.INPUT),
+            Pin(num='20',name='CPOUT',func=pin_types.PASSIVE),
             Pin(num='10',name='REGOUT',func=pin_types.PASSIVE),
             Pin(num='19',name='RESV',func=pin_types.NOCONNECT)] }),
         Part(**{ 'name':'HS20S010B_LCD', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'HS20S010B_LCD'}), 'ref_prefix':'LCD', 'fplist':None, 'footprint':'Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical', 'keywords':None, 'description':'HS20S010B 2.0 inch TFT LCD, 240x320, ST7789V2 driver, GT30L32S4W font IC', 'datasheet':None, 'pins':[
@@ -129,19 +129,19 @@ cyberwand_circuit = SchLib(tool=SKIDL).add_parts(*[
         Part(**{ 'name':'Battery_Cell', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'Battery_Cell'}), 'ref_prefix':'BT', 'fplist':None, 'footprint':'Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal', 'keywords':None, 'description':'603040 Li-Po Battery 800mAh with JST connector', 'datasheet':None, 'pins':[
             Pin(num='1',name='+',func=pin_types.PASSIVE),
             Pin(num='2',name='-',func=pin_types.PASSIVE)] }),
-        Part(**{ 'name':'TP4056', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'TP4056'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm', 'keywords':None, 'description':'TP4056 Li-Ion Charger', 'datasheet':None, 'pins':[
-            Pin(num='1',name='VIN',func=pin_types.PWRIN),
-            Pin(num='2',name='GND',func=pin_types.PWRIN),
-            Pin(num='3',name='BAT',func=pin_types.PWROUT),
-            Pin(num='4',name='CE',func=pin_types.INPUT),
-            Pin(num='5',name='PROG',func=pin_types.PASSIVE),
-            Pin(num='6',name='RST',func=pin_types.INPUT),
+        Part(**{ 'name':'TP4056', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'TP4056'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm', 'keywords':None, 'description':'TP4056 Li-Ion Charger, SOIC-8', 'datasheet':None, 'pins':[
+            Pin(num='1',name='TEMP',func=pin_types.INPUT),
+            Pin(num='2',name='PROG',func=pin_types.PASSIVE),
+            Pin(num='3',name='GND',func=pin_types.PWRIN),
+            Pin(num='4',name='VCC',func=pin_types.PWRIN),
+            Pin(num='5',name='BAT',func=pin_types.PWROUT),
+            Pin(num='6',name='STDBY',func=pin_types.OPENCOLL),
             Pin(num='7',name='CHRG',func=pin_types.OPENCOLL),
-            Pin(num='8',name='STDBY',func=pin_types.OPENCOLL)] }),
-        Part(**{ 'name':'ME6211A33', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'ME6211A33'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_TO_SOT_SMD:SOT-23', 'keywords':None, 'description':'ME6211 3.3V LDO', 'datasheet':None, 'pins':[
+            Pin(num='8',name='CE',func=pin_types.INPUT)] }),
+        Part(**{ 'name':'ME6211A33', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'ME6211A33'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_TO_SOT_SMD:SOT-23', 'keywords':None, 'description':'ME6211 3.3V/500mA LDO, SOT-23-3', 'datasheet':None, 'pins':[
             Pin(num='1',name='VIN',func=pin_types.PWRIN),
-            Pin(num='2',name='GND',func=pin_types.PWRIN),
-            Pin(num='3',name='VOUT',func=pin_types.PWROUT)] }),
+            Pin(num='2',name='VOUT',func=pin_types.PWROUT),
+            Pin(num='3',name='VSS',func=pin_types.PWRIN)] }),
         Part(**{ 'name':'USBLC6-2SC6', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'USBLC6-2SC6'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_TO_SOT_SMD:SOT-23-6', 'keywords':None, 'description':'USB ESD Protection, SOT-23-6, 0.4pF, IEC61000-4-2 Level 4', 'datasheet':None, 'pins':[
             Pin(num='1',name='IO1_1',func=pin_types.PASSIVE),
             Pin(num='2',name='GND',func=pin_types.PWRIN),
@@ -149,7 +149,7 @@ cyberwand_circuit = SchLib(tool=SKIDL).add_parts(*[
             Pin(num='4',name='IO2_2',func=pin_types.PASSIVE),
             Pin(num='5',name='VBUS',func=pin_types.PWRIN),
             Pin(num='6',name='IO1_2',func=pin_types.PASSIVE)] }),
-        Part(**{ 'name':'PTC_Fuse', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'PTC_Fuse'}), 'ref_prefix':'F', 'fplist':None, 'footprint':'Fuse:Fuse_1206_3216Metric', 'keywords':None, 'description':'PTC Resettable Fuse 500mA/15V, 1206', 'datasheet':None, 'pins':[
+        Part(**{ 'name':'PTC_Fuse', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'PTC_Fuse'}), 'ref_prefix':'F', 'fplist':None, 'footprint':'Fuse:Fuse_1206_3216Metric', 'keywords':None, 'description':'PTC Resettable Fuse 750mA/13.2V, 1206', 'datasheet':None, 'pins':[
             Pin(num='1',name='1',func=pin_types.PASSIVE),
             Pin(num='2',name='2',func=pin_types.PASSIVE)] }),
         Part(**{ 'name':'SN74AHCT125', 'dest':TEMPLATE, 'tool':SKIDL, 'aliases':Alias({'SN74AHCT125'}), 'ref_prefix':'U', 'fplist':None, 'footprint':'Package_SO:SOIC-14_3.9x8.7mm_P1.27mm', 'keywords':None, 'description':'74AHCT125 Quad Level-Shifter 3.3V to 5V, SOIC-14', 'datasheet':None, 'pins':[
