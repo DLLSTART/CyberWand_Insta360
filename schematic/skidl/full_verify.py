@@ -68,7 +68,6 @@ I = {
     'lcd_logic': 5, 'lcd_backlight': 80,
     'sd_write': 80, 'sd_idle': 1,
     'dfplayer_play': 30, 'dfplayer_idle': 15,
-    'inmp441': 1.4,
     'i2c_pullup': 1.4,  # 2×0.7mA
     'key_pullup': 1.0,   # 3×0.33mA
     'misc': 2,
@@ -238,19 +237,9 @@ T.ok("BUSY→IO45, SPK1/SPK2→扬声器")
 T.ok("去耦: C7(10uF)+C8(100nF)双去耦")
 
 # ============================================================
-# 9. INMP441
+# 9. WS2812B + 74AHCT125
 # ============================================================
-print("\n── 9. INMP441 麦克风 (I2S) ──")
-
-T.check_range(V_3V3, 1.8, 3.6, "INMP441 VDD", "V")
-T.ok("SCK←IO7(经33Ω), SD→IO15(直连), WS←IO16(经33Ω)")
-T.ok("L/R→GND(左声道)")
-T.ok("去耦: C10=100nF")
-
-# ============================================================
-# 10. WS2812B + 74AHCT125
-# ============================================================
-print("\n── 10. WS2812B LED + 电平转换 ──")
+print("\n── 9. WS2812B LED + 电平转换 ──")
 
 # 电平转换验证
 esp_voh = 0.8 * V_3V3  # 2.64V
@@ -262,12 +251,12 @@ T.check(esp_voh >= ahct_vih, f"ESP32 VOH={esp_voh}V ≥ AHCT VIH={ahct_vih}V", "
 T.check(ahct_voh >= ws_vih, f"AHCT VOH={ahct_voh}V ≥ WS2812B VIH={ws_vih}V", "电平不兼容!")
 T.ok(f"74AHCT125: VCC=5V_PROT, 去耦C16=100nF")
 T.ok("未用通道: 3OE/4OE→VCC禁用, 2A/3A/4A→GND防振荡")
-T.ok("每个WS2812B: 独立100nF去耦")
-T.ok("数据路径: IO21→100Ω→AHCT Ch1→D1→D2→D3串联")
+T.ok("WS2812B(D1): 100nF去耦")
+T.ok("数据路径: IO21→100Ω→AHCT Ch1→D1 (单颗，DOUT悬空)")
 
-# 各状态电流
+# 单颗 LED 电流
 for state, i_each in [("空闲", I['ws2812b_each_idle']), ("全白", I['ws2812b_each_white'])]:
-    i_total = 3 * i_each + I['ahct125']
+    i_total = 1 * i_each + I['ahct125']
     T.check_range(5.0 * i_each / 1000, 0, 0.3, f"WS2812B单颗{state}功耗", "W")
 
 # SPICE: 电平转换
@@ -281,9 +270,9 @@ v_buf = max(arr(a, 'buf'))
 T.check(v_buf > ahct_vih, f"SPICE AHCT输入={v_buf:.2f}V > VIH={ahct_vih}V", "电平不足!")
 
 # ============================================================
-# 11. 按键
+# 10. 按键
 # ============================================================
-print("\n── 11. 按键 ×3 ──")
+print("\n── 10. 按键 ×3 ──")
 
 T.ok("IO8→KEY_MODE: R4(10K)上拉+C18(100nF)去抖+SW2→GND")
 T.ok("IO3→KEY_SELECT: R5(10K)+C19(100nF)+SW3→GND")
@@ -295,9 +284,9 @@ i_key = V_3V3 / 10e3 * 1000  # mA
 T.ok(f"按键按下电流={i_key:.2f}mA/个, 极低")
 
 # ============================================================
-# 12. 综合功耗 - 三种工作状态
+# 11. 综合功耗 - 三种工作状态
 # ============================================================
-print("\n── 12. 综合功耗分析 ──")
+print("\n── 11. 综合功耗分析 ──")
 
 for state_name, usb_on, led_mode in [
     ("A: 电池供电(无USB)", False, "idle"),
@@ -308,15 +297,15 @@ for state_name, usb_on, led_mode in [
 
     # 3.3V负载
     i_3v3 = (I['esp32_active'] + I['mpu6050'] + I['lcd_logic'] + I['lcd_backlight']
-             + I['sd_idle'] + I['dfplayer_idle'] + I['inmp441']
+             + I['sd_idle'] + I['dfplayer_idle']
              + I['i2c_pullup'] + I['key_pullup'] + I['misc'])
 
     v_bat = V_BAT_TYP
     v_3v3_actual = min(V_3V3, v_bat - 0.1)  # LDO dropout
 
-    # 5V负载
+    # 5V负载 (单颗 WS2812B)
     ws_each = I['ws2812b_each_white'] if led_mode == "white" else I['ws2812b_each_idle']
-    i_5v = I['ahct125'] + 3 * ws_each
+    i_5v = I['ahct125'] + 1 * ws_each
     if usb_on:
         i_5v += I['tp4056_charge'] + I['led_indicator']
 

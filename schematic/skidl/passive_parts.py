@@ -65,7 +65,7 @@ R_4K7 = create_resistor('4.7k')
 R_2K = create_resistor('2k')
 R_5K1 = create_resistor('5.1k')
 R_1K = create_resistor('1k')       # LED 限流电阻
-R_33 = create_resistor('33')       # SPI/I2S 阻尼电阻 (信号完整性)
+R_33 = create_resistor('33')       # SPI 阻尼电阻 (信号完整性)
 R_100 = create_resistor('100')     # WS2812B 数据线串联电阻
 R_22 = create_resistor('22')       # USB 数据线串联电阻 (阻抗匹配)
 C_2N2 = create_capacitor('2.2nF')   # MPU6050 CPOUT 电荷泵
@@ -75,3 +75,19 @@ C_1U = create_capacitor('1uF')     # ESP32 EN复位延迟 / 通用
 C_22U = create_capacitor('22uF')   # 电源储能电容 (大容量)
 SWITCH = create_switch()
 SPEAKER = create_speaker()
+
+def create_pin_header_1x03(ref_prefix='J'):
+    """1x3 排针，用于调试串口等 (Pin1=TX, Pin2=RX, Pin3=GND)"""
+    p = Part(
+        name='Conn_01x03',
+        dest=TEMPLATE,
+        tool=SKIDL,
+        ref_prefix=ref_prefix,
+        footprint='Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical'
+    )
+    p += Pin(num='1', name='1', func=Pin.types.PASSIVE)
+    p += Pin(num='2', name='2', func=Pin.types.PASSIVE)
+    p += Pin(num='3', name='3', func=Pin.types.PASSIVE)
+    return p
+
+PIN_HEADER_1X03 = create_pin_header_1x03()

@@ -1,6 +1,8 @@
 """
-赛博魔杖 (CyberWand) 完整电路连接描述 v2.3
+赛博魔杖 (CyberWand) 完整电路连接描述 v2.4
 使用 SKiDL 描述所有硬件连接
+
+v2.4 变更: 去掉 DFPlayer 音频模块与扬声器；串口/烧录复用 USB；可编程 LED 仅保留一颗 WS2812B(D1)。
 
 v2.3 修复清单 (电气属性验证):
   ★ 致命修复: ME6211 SOT-23 Pin2/Pin3反了! 数据手册: Pin1=VIN,Pin2=VOUT,Pin3=VSS
@@ -33,8 +35,6 @@ from esp32_s3_wroom import ESP32_S3_WROOM
 from mpu6050_part import MPU6050
 from hs20s010b_lcd_part import HS20S010B_LCD
 from microsd_socket_part import MICROSD_SOCKET
-from dfplayer_mini_part import DFPLAYER_MINI
-from inmp441_part import INMP441
 from ws2812b_part import WS2812B
 from tp4056_part import TP4056
 from me6211_part import ME6211
@@ -48,7 +48,7 @@ from power_switch_part import POWER_SWITCH
 from passive_parts import (R_10K, R_4K7, R_2K, R_5K1, R_1K,
                            R_33, R_100, R_22,
                            C_2N2, C_100N, C_10U, C_1U, C_22U,
-                           SWITCH, SPEAKER)
+                           SWITCH)
 import os
 
 # ============================================================
@@ -59,11 +59,7 @@ mcu = ESP32_S3_WROOM()
 imu = MPU6050()
 lcd = HS20S010B_LCD()
 sd_card = MICROSD_SOCKET()
-audio_player = DFPLAYER_MINI()
-microphone = INMP441()
-led1 = WS2812B()
-led2 = WS2812B()
-led3 = WS2812B()
+led1 = WS2812B()   # 仅一颗可编程 RGB LED
 
 usb_conn = USB_TYPE_C()
 battery = BATTERY_603040()
@@ -78,11 +74,10 @@ pwr_switch = POWER_SWITCH()
 key_mode = SWITCH()
 key_select = SWITCH()
 key_play = SWITCH()
-speaker = SPEAKER()
 led_charging = LED_RED()
 led_charged = LED_GREEN()
 
-# --- 电阻 (19→20个, 新增DFPlayer RX保护) ---
+# --- 电阻 ---
 r_en_pullup = R_10K()
 r_i2c_sda_pullup = R_4K7()
 r_i2c_scl_pullup = R_4K7()
@@ -97,29 +92,21 @@ r_led_red = R_1K()
 r_led_green = R_1K()
 r_spi_sck_damp = R_33()
 r_spi_mosi_damp = R_33()
-r_i2s_sck_damp = R_33()
-r_i2s_ws_damp = R_33()
 r_led_data_series = R_100()
 r_usb_dp = R_22()
 r_usb_dn = R_22()
-r_dfplayer_rx = R_1K()          # ★ v2.2新增: DFPlayer RX保护电阻
-
-# --- 电容 (20→23个, 新增MPU6050+EN+BAT) ---
+# --- 电容 (20→24个, 新增MPU6050+EN+BAT+VLOGIC) ---
 c_mcu_1 = C_100N()
 c_mcu_2 = C_100N()
 c_mcu_3 = C_10U()
 c_en_reset = C_1U()             # ★ v2.2新增: ESP32 EN上电复位延迟
 c_imu = C_100N()                # MPU6050 VDD去耦
+c_imu_vlogic = C_100N()         # ★ 新增: MPU6050 VLOGIC去耦 (数字I/O参考电压)
 c_imu_cpout = C_2N2()           # ★ v2.2新增: MPU6050 CPOUT电荷泵 2.2nF
 c_imu_regout = C_100N()         # ★ v2.2新增: MPU6050 REGOUT内部稳压 100nF
 c_lcd_1 = C_100N()
 c_lcd_2 = C_10U()
-c_audio_1 = C_10U()
-c_audio_2 = C_100N()
-c_mic = C_100N()
-c_led1 = C_100N()
-c_led2 = C_100N()
-c_led3 = C_100N()
+c_led1 = C_100N()   # D1 去耦
 c_ldo_in = C_10U()
 c_ldo_out = C_10U()
 c_usb = C_10U()
@@ -317,6 +304,9 @@ imu['FSYNC'] += gnd               # Pin11: 不用帧同步→接GND
 c_imu[1] += vcc_3v3               # VDD去耦 100nF
 c_imu[2] += gnd
 
+c_imu_vlogic[1] += imu['VLOGIC']  # Pin8: VLOGIC去耦 100nF→GND (数字I/O参考电压)
+c_imu_vlogic[2] += gnd
+
 c_imu_cpout[1] += imu['CPOUT']    # Pin20: 电荷泵 2.2nF→GND
 c_imu_cpout[2] += gnd
 
@@ -351,7 +341,7 @@ mcu['IO13'] += spi_mosi_mcu
 r_spi_mosi_damp[1] += spi_mosi_mcu
 r_spi_mosi_damp[2] += spi_mosi
 
-mcu['IO12'] += spi_miso
+mcu['IO12'] += spi_miso   # MISO 直连（无串联电阻）
 mcu['IO14'] += spi_cs_lcd
 mcu['IO11'] += lcd_dc
 mcu['IO17'] += lcd_rst
@@ -386,7 +376,7 @@ spi_cs_sd = Net('SPI_CS_SD')
 # DAT1(Pin8) → MOSI (主出从入)
 sd_card['CMD'] += spi_cs_sd    # Pin3: CMD (SPI模式下用作CS)
 sd_card['CLK'] += spi_sck      # Pin5: CLK (SPI时钟)
-sd_card['DAT0'] += spi_miso     # Pin7: DAT0 (SPI MISO)
+sd_card['DAT0'] += spi_miso     # Pin7: DAT0 (SPI MISO)，直连 MCU
 sd_card['DAT1'] += spi_mosi     # Pin8: DAT1 (SPI MOSI)
 mcu['IO10'] += spi_cs_sd
 
@@ -397,71 +387,14 @@ mcu['IO10'] += spi_cs_sd
 # Pin1(DAT2), Pin8(DAT1), Pin9(SW_B), Pin10-14(NC) 未使用
 
 # ============================================================
-# 9. DFPlayer Mini (UART) ★ v2.2: 增加RX保护电阻
+# 9. 串口调试：USB 复用 (无需独立 UART 排针)
 # ============================================================
-
-audio_player['VCC'] += vcc_3v3
-audio_player['GND'] += gnd
-
-uart_tx = Net('UART_TX')
-uart_tx_prot = Net('UART_TX_PROT')  # ★ 保护电阻后
-uart_rx = Net('UART_RX')
-dfplayer_busy = Net('DFPLAYER_BUSY')
-
-mcu['IO47'] += uart_tx
-# ★ v2.2: TX→1KΩ→DFPlayer RX (保护DFPlayer输入)
-r_dfplayer_rx[1] += uart_tx
-r_dfplayer_rx[2] += uart_tx_prot
-audio_player['RX'] += uart_tx_prot
-
-mcu['IO48'] += uart_rx
-audio_player['TX'] += uart_rx
-
-mcu['IO45'] += dfplayer_busy
-audio_player['BUSY'] += dfplayer_busy
-
-audio_player['SPK1'] += speaker[1]
-audio_player['SPK2'] += speaker[2]
-
-c_audio_1[1] += vcc_3v3
-c_audio_1[2] += gnd
-c_audio_2[1] += vcc_3v3
-c_audio_2[2] += gnd
+# 使用现有 Type-C (J2) 连接电脑即可：ESP32-S3 内置 USB Serial/JTAG，
+# 固件中 Serial 输出通过 USB CDC 到电脑，无需外接 USB 转 TTL。
+# IO47/IO48 不接调试排针，留作 NC 或其它用途。
 
 # ============================================================
-# 10. INMP441 麦克风 (I2S + 阻尼电阻)
-# ============================================================
-
-microphone['VDD'] += vcc_3v3
-microphone['GND'] += gnd
-
-i2s_sck = Net('I2S_SCK')
-i2s_sd = Net('I2S_SD')
-i2s_ws = Net('I2S_WS')
-
-i2s_sck_mcu = Net('I2S_SCK_MCU')
-i2s_ws_mcu = Net('I2S_WS_MCU')
-
-mcu['IO7'] += i2s_sck_mcu
-r_i2s_sck_damp[1] += i2s_sck_mcu
-r_i2s_sck_damp[2] += i2s_sck
-
-mcu['IO16'] += i2s_ws_mcu
-r_i2s_ws_damp[1] += i2s_ws_mcu
-r_i2s_ws_damp[2] += i2s_ws
-
-mcu['IO15'] += i2s_sd
-
-microphone['SCK'] += i2s_sck
-microphone['SD'] += i2s_sd
-microphone['WS'] += i2s_ws
-microphone['L_R'] += gnd
-
-c_mic[1] += vcc_3v3
-c_mic[2] += gnd
-
-# ============================================================
-# 11. WS2812B (电平转换 + 独立去耦)
+# 10. WS2812B (电平转换 + 独立去耦)
 # ============================================================
 
 level_shifter['VCC'] += vcc_5v_prot
@@ -491,24 +424,14 @@ c_level_shifter[2] += gnd
 
 led1['VDD'] += vcc_5v_prot
 led1['GND'] += gnd
-led2['VDD'] += vcc_5v_prot
-led2['GND'] += gnd
-led3['VDD'] += vcc_5v_prot
-led3['GND'] += gnd
-
 led1['DIN'] += led_data_out
-led1['DOUT'] += led2['DIN']
-led2['DOUT'] += led3['DIN']
+# D1.Pin2(DOUT) 悬空 (单颗 LED，无级联)
 
 c_led1[1] += vcc_5v_prot
 c_led1[2] += gnd
-c_led2[1] += vcc_5v_prot
-c_led2[2] += gnd
-c_led3[1] += vcc_5v_prot
-c_led3[2] += gnd
 
 # ============================================================
-# 12. 按键 (硬件去抖)
+# 11. 按键 (硬件去抖)
 # ============================================================
 
 key_mode_net = Net('KEY_MODE')
@@ -539,7 +462,7 @@ c_key_play_debounce[1] += key_play_net
 c_key_play_debounce[2] += gnd
 
 # ============================================================
-# 13. 生成网表
+# 12. 生成网表
 # ============================================================
 
 if __name__ == '__main__':
@@ -553,4 +476,4 @@ if __name__ == '__main__':
     print(f"\n生成网表...")
     generate_netlist(file_=netlist_path)
     print(f"网表已生成: {netlist_path}")
-    print("\nv2.2 电路设计完成!")
+    print("\nv2.4 电路设计完成! (无音频，可编程LED仅D1)")

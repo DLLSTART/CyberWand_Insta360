@@ -104,12 +104,6 @@ CHIPS = {
         decoupling=['10uF', '100nF'],
         notes='3.3V在下限; RX需要串联保护电阻'
     ),
-    'INMP441': ChipSpec(
-        name='INMP441',
-        vdd_min=1.8, vdd_max=3.6, vdd_typ=3.3,
-        idd_typ=1.4, idd_max=2.0,
-        decoupling=['100nF'],
-    ),
 }
 
 
@@ -137,7 +131,6 @@ class CircuitParams:
     R_PROG = 2e3
     R_LED = 1e3
     R_SPI_DAMP = 33
-    R_I2S_DAMP = 33
     R_USB_SERIES = 22
     R_LED_SERIES = 100
     R_CC = 5.1e3
@@ -233,8 +226,6 @@ def test_connection_logic():
     # 信号完整性
     t.ok("SPI_SCK: IO9 → 33Ω → LCD+SD", "SPI时钟阻尼")
     t.ok("SPI_MOSI: IO13 → 33Ω → LCD+SD", "SPI数据阻尼")
-    t.ok("I2S_SCK: IO7 → 33Ω → INMP441", "I2S时钟阻尼")
-    t.ok("I2S_WS: IO16 → 33Ω → INMP441", "I2S字选阻尼")
     t.ok("USB_DP: Type-C → 22Ω → ESD → ESP32.IO20", "USB D+完整路径")
     t.ok("USB_DN: Type-C → 22Ω → ESD → ESP32.IO19", "USB D-完整路径")
     t.ok("LED_DATA: IO21 → 100Ω → 74AHCT125 → WS2812B", "LED数据路径")
@@ -264,7 +255,7 @@ def test_voltage_levels():
             v = P.V_5V_PROT
         elif name == 'ME6211':
             v = P.V_BAT_TYP  # VIN = 电池电压
-        elif name in ('MPU6050', 'INMP441'):
+        elif name == 'MPU6050':
             v = P.V_3V3
         elif name in ('USBLC6-2SC6', 'SN74AHCT125', 'WS2812B'):
             v = P.V_5V_PROT
@@ -396,7 +387,6 @@ def test_power_budget():
         'LCD背光 (BLK→3V3)': 80,  # 估计值
         'SD卡 (写入)': 80,
         'DFPlayer (播放)': 30,
-        'INMP441': 1.4,
         'I2C上拉×2': 1.4,
         '按键上拉×3': 1.0,
         '杂项(去抖等)': 2,
@@ -423,7 +413,7 @@ def test_power_budget():
     # --- 5V功耗预算 ---
     loads_5v = {
         'TP4056充电': 500,
-        'WS2812B×3 (全白)': 180,
+        'WS2812B×1 (全白)': 60,
         '74AHCT125': 10,
     }
 

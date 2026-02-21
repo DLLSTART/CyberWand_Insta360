@@ -1,8 +1,9 @@
-# CyberWand v2.3 - 完整电路原理图连接指南
+# CyberWand v2.4 - 完整电路原理图连接指南
 
-> **版本**: v2.3 | **日期**: 2026-02-14
+> **版本**: v2.4 | **日期**: 2026-02
 > **网表**: `output/cyberwand_netlist.net`
-> **总元件**: 66件 | **总网络**: 51个
+> **变更**: 去掉 DFPlayer 音频模块；串口调试复用 USB（Type-C 直连电脑，无需外接 USB 转 TTL）。
+> **总元件/网络**: 见网表
 > 
 > **重要**: 本文档中所有连接关系均已按照**封装引脚标号**标注，格式为 `U1.Pin4(IO4) → U2.Pin24(SDA)`，可直接用于PCB布局和原理图绘制。
 
@@ -119,9 +120,9 @@
 ### 1.2 TP4056 充电管理 + LED指示
 
 ```
-                     TP4056 (U4)  SOIC-8
+                     TP4056 (U4)  SOIC-8 (9脚含EP)
                 ┌──────────────────────────┐
-                │                          │
+                │  Pin9(EP) 散热焊盘 → GND  │  ※ 原理图符号第9脚EP需接GND
   GND ───────────┤ Pin1(TEMP)  Pin8(CE) ├──── 5V_PROT
                 │ ★TEMP接GND禁用!    │     (接VCC会阻止充电)
                 │                          │
@@ -154,6 +155,7 @@
   U4.Pin6(STDBY) → STDBY_STATUS → D5.Pin2(K)
   U4.Pin7(CHRG) → CHRG_STATUS → D4.Pin2(K)
   U4.Pin8(CE) → 5V_PROT
+  U4.Pin9(EP) → GND   （散热焊盘，必须接GND以散热并稳定地参考）
   C_BAT.Pin1 → VBAT, C_BAT.Pin2 → GND
 
 充电红色LED:                       充满绿色LED:
@@ -180,38 +182,39 @@
 
 ### 1.3 电池 + 电源开关 + LDO
 
+**说明**：开关采用 MSK12C02 四脚 SP3T（单刀三掷），公共端为 **Pin4**；LDO 采用 ME6211C33M5G-N **五脚** 封装（含 CE、NC）。若原理图符号内开关带 GND 标识，多为符号库的机械地或误绘，**切勿将开关公共端(Pin4)接 GND**，否则会短路电池。
+
 ```
-  锂电池 603040 (BT1)                 电源开关 (SW1) MSK-12C02
-  ┌──────────────────┐             ┌────────────────────┐
-  │  3.7V / 800mAh   │             │                    │
-  │                  │     VBAT    │ Pin1(COM) ── VBAT  │
-  │ Pin1(+) ─────────┼─────────────┤                    │
-  │                  │             │ Pin2(NO) ── VBAT_SW│
-  │ Pin2(-) ── GND   │             │                    │
-  └──────────────────┘             │ Pin3(NC) ── NC(悬空)│
-                                   └────────────────────┘
-                                             │
-                                          VBAT_SW
-                                             │
-               ┌───────────┐      ┌──────────┴───────────┐
-               │ C14 10uF  │      │                      │
-               │Pin1──┤├Pin2│     │  ME6211 (U5) SOT-23  │
-               │VBAT_SW GND│     │                      │
-               └───────────┘      │ Pin1(VIN) ── VBAT_SW │
-                                  │                      │
-                                  │ Pin2(VOUT)── 3V3     │ ★Pin2是VOUT!
-                                  │                      │
-                                  │ Pin3(VSS) ── GND     │ ★Pin3是GND!
-               ┌───────────┐      └──────────────────────┘
+  锂电池 603040 (BT1)                 电源开关 (SW1) MSK12C02 四脚 SP3T
+  ┌──────────────────┐             ┌────────────────────────────┐
+  │  3.7V / 800mAh   │             │  Pin4(COM) ← 公共端        │
+  │                  │     VBAT    │  Pin1/Pin3 → NC(悬空, OFF) │
+  │ Pin1(+) ─────────┼─────────────┤  Pin2 → VBAT_SW (ON 位)   │
+  │                  │             │  ※ COM 接电池正，勿接 GND   │
+  │ Pin2(-) ── GND   │             └────────────────────────────┘
+  └──────────────────┘                          │
+                                                 VBAT_SW
+                                                 │
+               ┌───────────┐      ┌──────────────┴────────────────┐
+               │ C14 10uF  │      │  ME6211C33M5G-N (U5) 五脚 LDO  │
+               │Pin1──┤├Pin2│     │                                │
+               │VBAT_SW GND│      │  Pin1(VIN)  ← VBAT_SW          │
+               └───────────┘      │  Pin2(VSS)  ← GND             │
+                                  │  Pin3(CE)   ← VBAT_SW (使能)  │
+                                  │  Pin4(NC)   ← 悬空             │
+                                  │  Pin5(VOUT) → 3V3             │
+               ┌───────────┐      └────────────────────────────────┘
                │ C9 10uF   │                │
                │Pin1──┤├Pin2│             3V3
                │3V3    GND │
                └───────────┘
                
 连接关系:
-  BT1.Pin1(+) → SW1.Pin1(COM) → SW1.Pin2(NO) → VBAT_SW → U5.Pin1(VIN)
-  U5.Pin2(VOUT) → 3V3
-  U5.Pin3(VSS) → GND
+  BT1.Pin1(+) → SW1.Pin4(COM) → SW1.Pin2 → VBAT_SW   （Pin2 为“开”位；Pin1/Pin3 悬空为“关”）
+  VBAT_SW → U5.Pin1(VIN), U5.Pin3(CE)   （CE 接 VBAT_SW，开关打开时 LDO 使能）
+  U5.Pin2(VSS) → GND
+  U5.Pin4(NC) → 悬空
+  U5.Pin5(VOUT) → 3V3
   C14.Pin1 → VBAT_SW, C14.Pin2 → GND
   C9.Pin1 → 3V3, C9.Pin2 → GND
 ```
@@ -243,24 +246,24 @@
      │  5(IO5) ─── I2C_SCL ──→ U2.Pin23(SCL)            │
      │  6(IO6) ─── MPU6050_INT ←─ U2.Pin12(INT)         │
      │                                                     │
-     │  7(IO7) ─── I2S_SCK_MCU ──[R15 33Ω]──→ MIC1.Pin3(SCK)
-     │  8(IO15)─── I2S_SD ←──────────────── MIC1.Pin4(SD)
-     │  9(IO16)─── I2S_WS_MCU ──[R16 33Ω]──→ MIC1.Pin5(WS)
+     │  7(IO7) ─── NC (预留)              │
+     │  8(IO15)─── NC (预留)              │
+     │  9(IO16)─── NC (预留)              │
      │                                                     │
-     │ 17(IO9) ─── SPI_SCK_MCU ─[R13 33Ω]─→ LCD1.Pin3(SCL) + J1.Pin5(SCK)
-     │ 21(IO13)─── SPI_MOSI_MCU ─[R14 33Ω]─→ LCD1.Pin4(SDA) + J1.Pin7(MOSI)
-     │ 20(IO12)─── SPI_MISO ←───────────── J1.Pin8(MISO)  │
+     │ 17(IO9) ─── SPI_SCK_MCU ─[R13 33Ω]─→ LCD1.Pin3(CLK) + J1.Pin5(CLK)
+     │ 21(IO13)─── SPI_MOSI_MCU ─[R14 33Ω]─→ LCD1.Pin4(SDA) + J1.Pin8(DAT1/MOSI)
+     │ 20(IO12)─── SPI_MISO ←───────────── J1.Pin7(DAT0/MISO)
      │ 19(IO11)─── LCD_DC ──→ LCD1.Pin6(DC)               │
      │ 22(IO14)─── SPI_CS_LCD ──→ LCD1.Pin7(CS)           │
-     │ 18(IO10)─── SPI_CS_SD ──→ J1.Pin2(CS)              │
+     │ 18(IO10)─── SPI_CS_SD ──→ J1.Pin3(CMD)              │
      │ 10(IO17)─── LCD_RST ──→ LCD1.Pin5(RES)             │
      │                                                     │
-     │ 24(IO47)─── UART_TX ──[R20 1KΩ]──→ U3.Pin2(RX)
-     │ 25(IO48)─── UART_RX ←──────────── U3.Pin3(TX)
-     │ 26(IO45)─── DFPLAYER_BUSY ←─────── U3.Pin16(BUSY)
+     │ 24(IO47)─── NC (预留)              │
+     │ 25(IO48)─── NC (预留)              │
+     │ 26(IO45)─── NC (预留)              │
      │                                                     │
-     │ 13(IO19)─── USB_DN_INT ←── USBLC6 ←── Type-C D-   │
-     │ 14(IO20)─── USB_DP_INT ←── USBLC6 ←── Type-C D+   │
+     │ 13(IO19)─── USB_DN_INT  ←── 串口调试复用 USB (D-) ←── USBLC6 ←── Type-C D-   │
+     │ 14(IO20)─── USB_DP_INT ←── 串口调试复用 USB (D+)   │
      │                                                     │
      │ 23(IO21)─── LED_DATA_MCU ──[R17 100Ω]──→ U7.Pin2(1A)
      │                                                     │
@@ -319,6 +322,8 @@
      │                                                  │
      │ Pin10(REGOUT)── C_REG(100nF)── GND ★稳压器必须  │
      │                                                  │
+     │ Pin8(VLOGIC)── C_VLOGIC(100nF)── GND ★去耦推荐  │
+     │                                                  │
      │ Pin19(RESV) ── NC (保留不接)                      │
      │ Pin6(AUX_DA)── NC                                │
      │ Pin7(AUX_CL)── NC                                │
@@ -351,11 +356,13 @@
 
 ## 四、SPI总线子系统 (LCD + SD卡)
 
+**SPI 阻尼电阻说明**：SCK、MOSI 由 MCU 驱动，串联 33Ω（R13/R14）用于阻抗匹配与反射阻尼。**MISO** 由从设备（SD 卡）驱动、MCU 仅接收，本图采用**直连**（不加电阻）；若希望与 SCK/MOSI 一致可选用 33Ω 串联，取舍见文档内“不加/加电阻”对比说明。
+
 ```
   ESP32                  33Ω阻尼              HS20S010B LCD (LCD1)
  ┌──────┐             ┌─────────┐           ┌─────────────────────┐
  │Pin17 │ SPI_SCK_MCU │Pin1 R13 Pin2│ SPI_SCK │                     │
- │(IO9) ├─────────────┤  33Ω   ├───────┬───┤ Pin3(SCL) ── SPI_SCK │
+ │(IO9) ├─────────────┤  33Ω    ├───────┬───┤ Pin3(CLK) ── SPI_SCK │
  │      │             └─────────┘       │   │                     │
  │Pin21 │ SPI_MOSI_MCU┌─────────┐      │   │ Pin4(SDA) ── SPI_MOSI│
  │(IO13)├─────────────┤Pin1 R14 Pin2├───┬───┼───┤                     │
@@ -363,7 +370,7 @@
  │      │             └─────────┘   │   │   │   │                 │
  │Pin20 │ SPI_MISO         │       │   │   │ Pin6(DC) ── LCD_DC  │
  │(IO12)├──────────┐       │       │   │   │   │                 │
- │      │          │       │       │   │   │ Pin7(CS) ── SPI_CS_LCD│
+ │      │          │       │       │   │   │ Pin7(CS1)── SPI_CS_LCD│
  │Pin19 │ LCD_DC   │       │       │   │   │   │                 │
  │(IO11)├──────────┼───────┼───────┼───┼───┤ Pin8(BLK) ── 3V3    │
  │      │          │       │       │   │   │                     │
@@ -378,113 +385,135 @@
  │      │      │   │       │       │   │  Pin1 3V3──┤├──Pin2 GND
  └──────┘      │   │       │       │   │
                │   │       │       │   │
-               │   │  MicroSD卡座 (J1) │
-               │   │  Hirose DM3AT     │
-               │   │ ┌─────────────────┤──────┐
-               │   │ │                 │      │
-               │   └─┤ Pin8(MISO)── SPI_MISO│
-               │     │                        │
-               │     │ Pin5(SCK) ── SPI_SCK ─┘ (共享)
-               │     │                        │
-               └─────┤ Pin2(CS) ── SPI_CS_SD│
-                     │                        │
-                     │ Pin7(MOSI)── SPI_MOSI ─┘ (共享)
-                     │                        │
-                     │ Pin4(VCC) ── 3V3       │
-                     │ Pin3(GND) ── GND      │
-                     │ Pin1(SHLD)── GND      │
-                     │ Pin9(CD) ── NC        │
-                     └────────────────────────┘
+               │   │  MicroSD卡座 (J1) DM3AT-SF-PEJM5  14引脚
+               │   │ ┌──────────────────┬──────────────────┐
+               │   │ │ 左侧 1-8(上→下)  │ 右侧 14-9(上→下) │
+               │   │ │ 1 DAT2    NC      │ 14 (未标)  NC    │
+               │   │ │ 2 CD/DAT3 NC      │ 13 (未标)  NC    │
+               │   └─┤ 3 CMD   SPI_CS_SD│ 12 (未标)  NC    │
+               │     │ 4 VDD   3V3       │ 11 SW_A    NC    │
+               │     │ 5 CLK   SPI_SCK   │ 10 (未标)  NC    │
+               │     │ 6 VSS   GND       │  9 SW_B    NC    │
+               │     │ 7 DAT0  SPI_MISO ─┘                  │
+               └─────┤ 8 DAT1  SPI_MOSI ─┘                  │
+                     └──────────────────┴──────────────────┘
+                     ※ SPI 模式使用 Pin3/4/5/6/7/8，其余 8 脚 NC
                      
 连接关系:
-  U1.Pin17(IO9) → R13.Pin1 → R13.Pin2 → LCD1.Pin3(SCL) + J1.Pin5(SCK)
-  U1.Pin21(IO13) → R14.Pin1 → R14.Pin2 → LCD1.Pin4(SDA) + J1.Pin7(MOSI)
-  J1.Pin8(MISO) → U1.Pin20(IO12)
+  U1.Pin17(IO9) → R13.Pin1 → R13.Pin2 → LCD1.Pin3(CLK) + J1.Pin5(CLK)
+  U1.Pin21(IO13) → R14.Pin1 → R14.Pin2 → LCD1.Pin4(SDA) + J1.Pin8(DAT1)
+  J1.Pin7(DAT0) → U1.Pin20(IO12)   （MISO 直连，无串联电阻）
   U1.Pin19(IO11) → LCD1.Pin6(DC)
-  U1.Pin22(IO14) → LCD1.Pin7(CS)
-  U1.Pin18(IO10) → J1.Pin2(CS)
+  U1.Pin22(IO14) → LCD1.Pin7(CS1)
+  U1.Pin18(IO10) → J1.Pin3(CMD)
   U1.Pin10(IO17) → LCD1.Pin5(RES)
 ```
 
----
+### 4.1 LCD1 (HS20S010B) 全20引脚接法
 
-## 五、DFPlayer音频子系统原理图
+**为什么有 20 个引脚但连接图只画了约 10 个？**  
+模块是 **2×10 排针**：上排 Pin1–10 与下排 Pin11–20 **功能重复**（同一组信号引出两次）。例如 Pin1(GND) 与 Pin12(GND_B)、Pin3(CLK) 与 Pin16(CLK_B) 等是同一信号，所以**逻辑上只需约 10 种连接**；连接图通常只画出这 10 组，其余引脚要么与它们同网络，要么 NC。详细说明见 [LCD_20引脚说明.md](LCD_20引脚说明.md)。
 
-```
-   ESP32                              DFPlayer Mini (U3)
-  ┌──────┐                         ┌──────────────────────────┐
-  │Pin24 │  UART_TX   ┌────────┐  │                          │
-  │(IO47)├────────────┤Pin1 R20 Pin2├──┤ Pin2(RX) ← UART_TX_PROT│
-  │      │            │  1KΩ   │  │                          │
-  │Pin25 │  UART_RX   └────────┘  │ Pin3(TX) ── UART_RX      │
-  │(IO48)├────────────────────────┤                          │
-  │      │                        │Pin16(BUSY)── DFPLAYER_BUSY│
-  │Pin26 │  DFPLAYER_BUSY         │                          │
-  │(IO45)├────────────────────────┤ Pin1(VCC) ── 3V3          │
-  └──────┘                        │ Pin7(GND) ── GND          │
-                                  │                          │
-                                  │ Pin8(SPK1)──┐             │
-                                  │            │  扬声器 (LS1)│
-                                  │ Pin9(SPK2)──┤  8Ω 0.5W   │
-                                  │            │             │
-                                  └────────────┼─────────────┘
-                                               │
-                                  ┌────────────┼──────────┐
-                                  │ C7 10uF    │C8 100nF  │
-                                  │Pin1 3V3┤├Pin2 GND    │Pin1 3V3┤├Pin2 GND
-                                  └────────────┴──────────┘
-                                  
-连接关系:
-  U1.Pin24(IO47) → R20.Pin1 → R20.Pin2 → U3.Pin2(RX)
-  U3.Pin3(TX) → U1.Pin25(IO48)
-  U3.Pin16(BUSY) → U1.Pin26(IO45)
-  U3.Pin1(VCC) → 3V3
-  U3.Pin7(GND) → GND
-  U3.Pin8(SPK1) → LS1.Pin1(+)
-  U3.Pin9(SPK2) → LS1.Pin2(-)
-  C7.Pin1 → 3V3, C7.Pin2 → GND
-  C8.Pin1 → 3V3, C8.Pin2 → GND
-```
+| 封装Pin | 名称 | 接法 | 说明 |
+|---------|------|------|------|
+| 1 | GND | GND | 与 Pin12 同信号 |
+| 2 | VCC | 3V3 | 与 Pin11 同信号 |
+| 3 | CLK | SPI_SCK | 与 Pin16 同信号 |
+| 4 | SDA | SPI_MOSI | 与 Pin17 同信号 |
+| 5 | RES | LCD_RST | 与 Pin19 同信号 |
+| 6 | DC | LCD_DC | 与 Pin18 同信号 |
+| 7 | CS1 | SPI_CS_LCD | 与 Pin20 同信号 |
+| 8 | BLK | 3V3 | 背光控制，仅上排 |
+| 9 | FS0 | **NC (悬空)** | 字库未用时悬空 |
+| 10 | FCS | **NC (悬空)** | 字库未用时悬空 |
+| 11 | VCC_B | 3V3 | 建议接 3V3 以改善供电 |
+| 12 | GND_B | GND | 建议接 GND |
+| 13 | BLA | **NC (悬空)** | 背光阳极，按需接或 NC |
+| 14 | FCS_B | **NC (悬空)** | 与 Pin10 同信号，可 NC |
+| 15 | FS0_B | **NC (悬空)** | 与 Pin9 同信号，可 NC |
+| 16 | CLK_B | **NC (悬空)** | 与 Pin3 同信号，可 NC |
+| 17 | SDA_B | **NC (悬空)** | 与 Pin4 同信号，可 NC |
+| 18 | DC_B | **NC (悬空)** | 与 Pin6 同信号，可 NC |
+| 19 | RES_B | **NC (悬空)** | 与 Pin5 同信号，可 NC |
+| 20 | CS1_B | **NC (悬空)** | 与 Pin7 同信号，可 NC |
 
----
+### 4.2 J1 (MicroSD DM3AT-SF-PEJM5) 全14引脚接法
 
-## 六、INMP441 麦克风子系统原理图
+**为什么 14 个引脚只有 6 个在用？**  
+本电路采用 **SPI 模式** 访问 SD 卡。SPI 模式只需：**CMD(片选)、VDD、VSS、CLK、DAT0(MISO)、DAT1(MOSI)** 共 6 个引脚。其余引脚在 SPI 模式下不用：**DAT2、CD/DAT3** 为 SD 模式或卡检测用，**SW_A/SW_B** 为卡座机械开关，**Pin10/12/13/14** 未标注，均作 **NC (悬空)** 即可。
 
-```
-  ESP32                          INMP441 (MIC1)
- ┌──────┐                     ┌──────────────────┐
- │Pin7  │ I2S_SCK_MCU         │                  │
- │(IO7) ├──────┐              │ Pin1(VDD)── 3V3  │
- │      │  ┌───┴───────┐     │                  │
- │      │  │Pin1 R15 Pin2│     │ Pin2(GND)── GND  │
- │      │  │  33Ω      │     │                  │
- │      │  └───────┬───┘     │ Pin3(SCK)── I2S_SCK│
- │      │    I2S_SCK──────────┤                  │
- │Pin8  │                     │ Pin4(SD) ── I2S_SD│
- │(IO15)├─── I2S_SD ──────────┤                  │
- │      │                     │ Pin5(WS) ── I2S_WS│
- │Pin9  │ I2S_WS_MCU          │                  │
- │(IO16)├──────┐              │ Pin6(L_R)── GND  │
- │      │  ┌───┴───────┐     └──────────────────┘
- │      │  │Pin1 R16 Pin2│
- │      │  │  33Ω      │     去耦: C10(100nF)
- │      │  └───────┬───┘     Pin1 3V3──┤├──Pin2 GND
- │      │    I2S_WS──┘
- └──────┘
- 
-连接关系:
-  U1.Pin7(IO7) → R15.Pin1 → R15.Pin2 → MIC1.Pin3(SCK)
-  MIC1.Pin4(SD) → U1.Pin8(IO15)
-  U1.Pin9(IO16) → R16.Pin1 → R16.Pin2 → MIC1.Pin5(WS)
-  MIC1.Pin1(VDD) → 3V3
-  MIC1.Pin2(GND) → GND
-  MIC1.Pin6(L_R) → GND
-  C10.Pin1 → 3V3, C10.Pin2 → GND
-```
+| 封装Pin | 名称 | 接法 | 说明 |
+|---------|------|------|------|
+| 1 | DAT2 | **NC (悬空)** | SD 4bit 模式用，SPI 不接 |
+| 2 | CD/DAT3 | **NC (悬空)** | 卡检测/数据3，SPI 可不接 |
+| 3 | CMD | SPI_CS_SD | SPI 片选 |
+| 4 | VDD | 3V3 | 电源 |
+| 5 | CLK | SPI_SCK | SPI 时钟 |
+| 6 | VSS | GND | 地 |
+| 7 | DAT0 | SPI_MISO | SPI 主入从出 |
+| 8 | DAT1 | SPI_MOSI | SPI 主出从入 |
+| 9 | SW_B | **NC (悬空)** | 卡座开关 B |
+| 10 | (未标注) | **NC (悬空)** | - |
+| 11 | SW_A | **NC (悬空)** | 卡座开关 A |
+| 12 | (未标注) | **NC (悬空)** | - |
+| 13 | (未标注) | **NC (悬空)** | - |
+| 14 | (未标注) | **NC (悬空)** | - |
 
 ---
 
-## 七、WS2812B LED + 电平转换子系统原理图
+## 五、串口调试与固件烧录（USB 复用，无需独立 UART 模块）
+
+魔杖通过 **同一根 Type-C 线** 连接电脑即可完成 **串口打印调试** 和 **固件烧录/升级**，**无需外接 USB 转 TTL 或独立 UART 排针**。即：**当前项目使用 USB 连接电脑的方式进行开发调试与固件更新（非无线 OTA）**。
+
+- **硬件**：现有 USB Type-C 座 (J2) 的 D+/D- 已接 ESP32-S3 的 **IO20(DP)**、**IO19(DN)**，经 ESD 保护 (U6) 和串联电阻后进 MCU。
+- **串口调试**：ESP32-S3 内置 **USB Serial/JTAG**，连接电脑后会枚举为 **USB CDC 串口**；固件中 `Serial` 默认即走该 USB，`Serial.print` 等输出直接在电脑端串口监视器显示。
+- **固件烧录/升级**：同一 USB 路径支持 **USB 下载模式**（进入 bootloader 后），可用 Arduino IDE“上传”、`idf.py flash`、esptool 等通过 Type-C 线烧录或升级固件，**即通过 USB 连电脑的方式做“有线 OTA”**。
+- **使用**：Type-C 线连接魔杖与电脑 → 电脑识别 COM 口 → 串口监视器查看打印，或运行烧录工具进行固件更新。
+
+```
+  J2(Type-C)  ←──USB线──→  电脑
+       │
+   D+/D- → U6(ESD) → R18/R19(22Ω) → U1.Pin14(IO20)/Pin13(IO19)
+                              ↑
+                    串口调试与烧录均通过此 USB 路径
+```
+
+### 5.1 通过 USB 烧录程序：电路是否支持？需要怎么做？
+
+**结论：当前电路已支持通过 USB 烧录，无需改原理图。**
+
+| 项目 | 说明 |
+|------|------|
+| **电路是否支持** | ✅ 支持。J2(Type-C) 的 D+/D- 已接 ESP32-S3 的 IO20/IO19，ESP32-S3 内置 **USB Serial/JTAG**，可做 CDC 串口和 **USB 下载（烧录）**。 |
+| **是否需要额外设计** | ❌ 不需要。不接 USB 转 TTL、不增加 UART 排针，仅用现有 J2 即可。 |
+| **BOOT/下载模式** | IO0 已接 **KEY_PLAY (SW4)**：需要进入下载模式时，可 **按住 PLAY 键** 再上电或复位，再在电脑上执行烧录。部分工具（如 idf.py、Arduino）也会通过 USB 自动尝试进入下载模式。 |
+
+**操作步骤（你需要做的）：**
+
+1. **接线**  
+   - 用 **Type-C 数据线** 将魔杖 **J2** 与 **电脑 USB 口** 连接。  
+   - 板子可由 USB 供电，或电池+开关供电均可（保证 3.3V 正常即可）。
+
+2. **进入下载模式（若工具未自动进入）**  
+   - **按住 KEY_PLAY（SW4）** 不松开 → 再 **上电** 或 **重新插拔 USB**，然后松开按键。  
+   - 或：先按住 KEY_PLAY，再短接 EN 与 GND 一下做复位（若板上有预留复位点），再松开 KEY_PLAY。  
+   - 使用 Arduino IDE 或 `idf.py flash` 时，多数情况会通过 USB 自动进入下载，无需每次手动按键。
+
+3. **在电脑上烧录**  
+   - **Arduino IDE**：选择开发板为 **ESP32-S3**（如 “ESP32S3 Dev Module”），选择对应的 **USB CDC 或 USB JTAG 的 COM 口**，点击“上传”。  
+   - **ESP-IDF**：在工程目录执行 `idf.py -p COMx flash`（COMx 为电脑识别的端口号）。  
+   - **esptool**：`esptool.py -p COMx write_flash 0x0 firmware.bin`。
+
+4. **驱动**  
+   - 若电脑未识别到 COM 口，请安装乐鑫 **CP210x / CH343 或 ESP32-S3 USB JTAG 相关驱动**（视模块与系统而定）。
+
+**硬件要点小结**：  
+- **J2** → D+/D- → **U6(ESD)** → **R18/R19(22Ω)** → **U1.IO20 / U1.IO19**：已满足 USB 烧录与串口调试。  
+- **IO0** 接 **KEY_PLAY**：必要时可手动进入下载模式，**无需在电路上再做设计**。
+
+---
+
+## 六、WS2812B LED + 电平转换子系统原理图
 
 ```
   ESP32          100Ω串联           SN74AHCT125 (U7) SOIC-14
@@ -513,28 +542,27 @@
              ┌──────────────────────────────────┘
              │
              ▼ DIN
-   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-   │  D1 WS2812B  │      │  D2 WS2812B  │      │  D3 WS2812B  │
-   │              │      │              │      │              │
-   │Pin1(VDD)─5V_PROT│   │Pin1(VDD)─5V_PROT│   │Pin1(VDD)─5V_PROT│
-   │Pin3(GND)─GND│      │Pin3(GND)─GND│      │Pin3(GND)─GND│
-   │Pin4(DIN)←──────│    │Pin4(DIN)←──────│    │Pin4(DIN)←──────│
-   │Pin2(DOUT)──────→│   │Pin2(DOUT)──────→│   │Pin2(DOUT)── NC │
-   └──────┬───────┘      └──────┬───────┘      └──────┬───────┘
-          │                     │                     │
-   C11(100nF)             C12(100nF)            C13(100nF)
-   Pin1 5V_PROT┤├Pin2 GND  Pin1 5V_PROT┤├Pin2 GND  Pin1 5V_PROT┤├Pin2 GND
-   
+   ┌──────────────┐
+   │  D1 WS2812B  │  单颗可编程 RGB LED
+   │              │
+   │Pin1(VDD)─5V_PROT│
+   │Pin3(GND)─GND│
+   │Pin4(DIN)←──────│
+   │Pin2(DOUT)─ NC  │  (无级联，悬空)
+   └──────┬───────┘
+          │
+   C11(100nF)
+   Pin1 5V_PROT┤├Pin2 GND
+
 连接关系:
   U1.Pin23(IO21) → R17.Pin1 → R17.Pin2 → U7.Pin2(1A) → U7.Pin3(1Y) → D1.Pin4(DIN)
-  D1.Pin2(DOUT) → D2.Pin4(DIN) → D2.Pin2(DOUT) → D3.Pin4(DIN)
-  D1/D2/D3.Pin1(VDD) → 5V_PROT
-  D1/D2/D3.Pin3(GND) → GND
+  D1.Pin2(DOUT) → NC (悬空)
+  D1.Pin1(VDD) → 5V_PROT, D1.Pin3(GND) → GND
 ```
 
 ---
 
-## 八、按键子系统原理图 (×3组相同结构)
+## 七、按键子系统原理图 (×3组相同结构)
 
 ```
 按键1 (模式选择):                按键2 (手势选择):                按键3 (播放/确认):
@@ -563,7 +591,7 @@
 
 ---
 
-## 九、完整引脚对引脚连线表
+## 八、完整引脚对引脚连线表
 
 ### ESP32-S3 Pin → 目标
 
@@ -574,40 +602,71 @@
 | IO4 | 4 | I2C_SDA | R2(4.7K)→3V3 | U2(MPU6050).Pin24 |
 | IO5 | 5 | I2C_SCL | R3(4.7K)→3V3 | U2(MPU6050).Pin23 |
 | IO6 | 6 | MPU6050_INT | 直连 | U2(MPU6050).Pin12 |
-| IO7 | 7 | I2S_SCK_MCU | R15(33Ω) | MIC1(INMP441).Pin3 |
+| IO7 | 7 | NC (预留) | 悬空 | - |
 | IO8 | 12 | KEY_MODE | R4(10K)→3V3, C18(100nF)→GND | SW2.Pin1 |
 | IO9 | 17 | SPI_SCK_MCU | R13(33Ω) | LCD1.Pin3 + J1.Pin5 |
-| IO10 | 18 | SPI_CS_SD | 直连 | J1(SD).Pin2 |
+| IO10 | 18 | SPI_CS_SD | 直连 | J1(SD).Pin3(CMD) |
 | IO11 | 19 | LCD_DC | 直连 | LCD1.Pin6 |
-| IO12 | 20 | SPI_MISO | 直连 | J1(SD).Pin8 |
-| IO13 | 21 | SPI_MOSI_MCU | R14(33Ω) | LCD1.Pin4 + J1.Pin7 |
+| IO12 | 20 | SPI_MISO | 直连 | J1(SD).Pin7(DAT0) |
+| IO13 | 21 | SPI_MOSI_MCU | R14(33Ω) | LCD1.Pin4 + J1.Pin8(DAT1) |
 | IO14 | 22 | SPI_CS_LCD | 直连 | LCD1.Pin7 |
-| IO15 | 8 | I2S_SD | 直连 | MIC1(INMP441).Pin4 |
-| IO16 | 9 | I2S_WS_MCU | R16(33Ω) | MIC1(INMP441).Pin5 |
+| IO15 | 8 | NC (预留) | 悬空 | - |
+| IO16 | 9 | NC (预留) | 悬空 | - |
 | IO17 | 10 | LCD_RST | 直连 | LCD1.Pin5 |
 | IO19 | 13 | USB_DN_INT | R19(22Ω)+U6(ESD) | J2(USB).Pin7(DN1),Pin5(DN2) |
 | IO20 | 14 | USB_DP_INT | R18(22Ω)+U6(ESD) | J2(USB).Pin6(DP1),Pin8(DP2) |
 | IO21 | 23 | LED_DATA_MCU | R17(100Ω)→U7(74AHCT125) | D1(WS2812B).Pin4 |
-| IO45 | 26 | DFPLAYER_BUSY | 直连 | U3(DFPlayer).Pin16 |
+| IO45 | 26 | NC (预留) | 悬空 | - |
 | IO46 | 16 | (下拉) | R7(10K)→GND | - |
-| IO47 | 24 | UART_TX | R20(1KΩ) | U3(DFPlayer).Pin2 |
-| IO48 | 25 | UART_RX | 直连 | U3(DFPlayer).Pin3 |
+| IO47 | 24 | NC (预留) | 悬空 | - |
+| IO48 | 25 | NC (预留) | 悬空 | - |
 | EN | 3 | (复位) | R1(10K)→3V3, C_EN(1uF)→GND | - |
 | 3V3 | 2 | 3V3 | C1(100nF),C2(100nF),C3(10uF)→GND | - |
 | GND1 | 1 | GND | - | - |
 | GND2 | 40 | GND | - | - |
 | EPAD | 41 | GND | - | - |
 
+### 电源网络说明（嘉立创/原理图网络标签用）
+
+以下说明各电源**网络名**的含义，便于在嘉立创等原理图工具中用**网络标签（Net Label）**正确命名。
+
+| 网络名 | 含义 | 是否“输出电压” | 原理图用法 |
+|--------|------|----------------|------------|
+| **5V** | USB 输入的 5V，**未经过保险丝** | 否，来自 J2(VBUS) | 仅连接：J2 的 VBUS 引脚 → F1.Pin1；该段导线放置标签 `5V` |
+| **5V_PROT** | **经 PTC 保险丝 F1 保护后的 5V**，即 F1 的**输出侧**整板 5V 电源轨 | 对 F1 而言是“输出”；对后续芯片而言是“输入电源” | 凡需要从“保护后 5V”取电的节点都标为 `5V_PROT`：F1.Pin2、U4/VCC、U6/VBUS、U7/VCC、WS2812 VDD、充电/状态 LED 限流电阻一侧、去耦电容 C15/C17 等 |
+| **VBAT** | 电池电压（未经过开关） | 来自电池/TP4056 | 标在 BT1 正极、U4.Pin5(BAT)、SW1.Pin4(COM)、C_BAT 等 |
+| **VBAT_SW** | 经 SW1 开关后的电池电压 | 对 SW1 是输出 | 标在 SW1.Pin2、U5.Pin1(VIN)、U5.Pin3(CE)、C14 等 |
+| **3V3** | LDO U5(ME6211) 输出的 3.3V | 是，U5 的输出 | 标在 U5.Pin5(VOUT) 及所有 3.3V 负载 |
+| **GND** | 系统公共地 | - | 所有地线统一标 `GND` |
+
+**5V_PROT 小结**：  
+- **不是**某颗 IC 的“输出电压”，而是**一根电源网络**的名字。  
+- 来源：USB 5V → **F1(PTC 保险丝) Pin1 → Pin2** → 这根线及其所连接的所有节点统称 **5V_PROT**。  
+- 在嘉立创原理图中：在 F1 的 Pin2 引出的导线上放置网络标签 **`5V_PROT`**；所有需要从“保护后 5V”供电的元件引脚接到这根线或同样放置 **`5V_PROT`** 标签，即表示同一网络。
+
+**网络标签 vs 电源符号（如 3V3）**：  
+- 在嘉立创、KiCad、Altium 等 EDA 中，**网络名称相同即视为同一网络**。因此：  
+  - 你在 **LDO 输出** 上放的 **网络标签 `3V3`**  
+  - 与在别处使用的 **系统自带电源符号（Power Port）改名为 `3V3`**  
+  **会匹配成同一网络**，ERC/DRC 和网表都会把它们连在一起，无需改接法。  
+- 若希望原理图“看起来”统一为“从 LDO 供出的 3V3”，可以二选一：  
+  1. **保留现状**：LDO 输出用网络标签 `3V3`，其他模块继续用电源符号 `3V3` —— 电气上等价，推荐。  
+  2. **统一为网络标签**：删除各处的 3V3 电源符号，在对应引脚上放置 **网络标签 `3V3`**（不改变网络名即可）。  
+  3. **统一为电源符号**：把 LDO 输出那根线也改成放置 **电源符号并命名为 `3V3`**（与系统自带封装同名），其他位置继续用电源符号 `3V3`。  
+只要网络名一致（均为 `3V3`），三种方式都能正确连接；选择你习惯或规范要求的方式即可。
+
+---
+
 ### 电源网络连线表
 
 | 网络名 | 来源 | 连接到 (芯片.引脚) |
 |--------|------|-------------------|
 | 5V | J2.Pin2(VBUS1), J2.Pin11(VBUS2) | F1.Pin1 |
-| 5V_PROT | F1.Pin2 | U4.Pin4(VCC), U4.Pin8(CE), U6.Pin5(VBUS), U7.Pin14(VCC), U7.Pin9(3OE), U7.Pin12(4OE), D1.Pin1(VDD), D2.Pin1(VDD), D3.Pin1(VDD), C15.1, C17.1, C16.1, C11.1, C12.1, C13.1, R11.1, R12.1 |
-| VBAT | U4.Pin5(BAT), BT1.Pin1(+) | SW1.Pin1(COM), C_BAT.1 |
-| VBAT_SW | SW1.Pin2(NO) | U5.Pin1(VIN), C14.1 |
-| 3V3 | U5.Pin3(VOUT) | U1.Pin2, U2.Pin13(VDD), U2.Pin8(VLOGIC), LCD1.Pin2(VCC), LCD1.Pin8(BLK), J1.Pin4(VCC), U3.Pin1(VCC), MIC1.Pin1(VDD), R1.2, R2.2, R3.2, R4.2, R5.2, R6.2, C1.1, C2.1, C3.1, C4.1, C5.1, C6.1, C7.1, C8.1, C9.1, C10.1 |
-| GND | 系统共地 | 所有芯片GND引脚, 所有电容Pin2, U4.Pin1(TEMP★), U2.Pin9(AD0), U2.Pin1(CLKIN), U2.Pin11(FSYNC), MIC1.Pin6(L_R), U7.Pin7, U7.Pin1(1OE), U7.Pin4(2OE), U7.Pin5(2A), U7.Pin8(3A), U7.Pin11(4A), R7.2, R8.2, R9.2, R10.2, J1.Pin1(SHLD), J1.Pin3 |
+| 5V_PROT | F1.Pin2 | U4.Pin4(VCC), U4.Pin8(CE), U6.Pin5(VBUS), U7.Pin14(VCC), U7.Pin9(3OE), U7.Pin12(4OE), D1.Pin1(VDD), C15.1, C17.1, C16.1, C11.1, R11.1, R12.1 |
+| VBAT | U4.Pin5(BAT), BT1.Pin1(+) | SW1.Pin4(COM), C_BAT.1 |
+| VBAT_SW | SW1.Pin2 | U5.Pin1(VIN), U5.Pin3(CE), C14.1 |
+| 3V3 | U5.Pin5(VOUT) | U1.Pin2, U2.Pin13(VDD), U2.Pin8(VLOGIC), LCD1.Pin2(VCC), LCD1.Pin8(BLK), J1.Pin4(VCC), R1.2, R2.2, R3.2, R4.2, R5.2, R6.2, C1.1, C2.1, C3.1, C4.1, C5.1, C6.1, C9.1, C10.1 |
+| GND | 系统共地 | 所有芯片GND引脚, 所有电容Pin2, U4.Pin1(TEMP★), U4.Pin9(EP), U2.Pin9(AD0), U2.Pin1(CLKIN), U2.Pin11(FSYNC), U7.Pin7, U7.Pin1(1OE), U7.Pin4(2OE), U7.Pin5(2A), U7.Pin8(3A), U7.Pin11(4A), R7.2, R8.2, R9.2, R10.2, J1.Pin1(SHLD), J1.Pin6(VSS) |
 
 ### 信号网络连线表
 
@@ -617,23 +676,15 @@
 | I2C_SCL | U1.Pin5(IO5) | U2.Pin23(SCL) | R3(4.7K)→3V3 |
 | MPU6050_INT | U2.Pin12(INT) | U1.Pin6(IO6) | - |
 | SPI_SCK_MCU | U1.Pin17(IO9) | R13.Pin1 | - |
-| SPI_SCK | R13.Pin2 | LCD1.Pin3(SCL), J1.Pin5(SCK) | - |
+| SPI_SCK | R13.Pin2 | LCD1.Pin3(CLK), J1.Pin5(CLK) | - |
 | SPI_MOSI_MCU | U1.Pin21(IO13) | R14.Pin1 | - |
-| SPI_MOSI | R14.Pin2 | LCD1.Pin4(SDA), J1.Pin7(MOSI) | - |
-| SPI_MISO | J1.Pin8(MISO) | U1.Pin20(IO12) | - |
-| SPI_CS_LCD | U1.Pin22(IO14) | LCD1.Pin7(CS) | - |
-| SPI_CS_SD | U1.Pin18(IO10) | J1.Pin2(CS) | - |
+| SPI_MOSI | R14.Pin2 | LCD1.Pin4(SDA), J1.Pin8(DAT1) | - |
+| SPI_MISO | J1.Pin7(DAT0) | U1.Pin20(IO12) | - |
+| SPI_CS_LCD | U1.Pin22(IO14) | LCD1.Pin7(CS1) | - |
+| SPI_CS_SD | U1.Pin18(IO10) | J1.Pin3(CMD) | - |
 | LCD_DC | U1.Pin19(IO11) | LCD1.Pin6(DC) | - |
 | LCD_RST | U1.Pin10(IO17) | LCD1.Pin5(RES) | - |
-| I2S_SCK_MCU | U1.Pin7(IO7) | R15.Pin1 | - |
-| I2S_SCK | R15.Pin2 | MIC1.Pin3(SCK) | - |
-| I2S_SD | MIC1.Pin4(SD) | U1.Pin8(IO15) | - |
-| I2S_WS_MCU | U1.Pin9(IO16) | R16.Pin1 | - |
-| I2S_WS | R16.Pin2 | MIC1.Pin5(WS) | - |
-| UART_TX | U1.Pin24(IO47) | R20.Pin1 | - |
-| UART_TX_PROT | R20.Pin2 | U3.Pin2(RX) | - |
-| UART_RX | U3.Pin3(TX) | U1.Pin25(IO48) | - |
-| DFPLAYER_BUSY | U3.Pin16(BUSY) | U1.Pin26(IO45) | - |
+| (串口调试) | USB CDC | J2 D+/D- → U6 → U1.Pin13/14(IO19/IO20) | 见第五节 |
 | USB_DP | J2.Pin6(DP1), J2.Pin8(DP2) | R18.Pin1 | - |
 | USB_DP_INT | R18.Pin2 | U6.Pin1(IO1_1), U6.Pin6(IO1_2), U1.Pin14(IO20) | - |
 | USB_DN | J2.Pin7(DN1), J2.Pin5(DN2) | R19.Pin1 | - |
@@ -641,8 +692,6 @@
 | LED_DATA_MCU | U1.Pin23(IO21) | R17.Pin1 | - |
 | LED_DATA_BUF | R17.Pin2 | U7.Pin2(1A) | - |
 | LED_DATA_5V | U7.Pin3(1Y) | D1.Pin4(DIN) | - |
-| (D1→D2) | D1.Pin2(DOUT) | D2.Pin4(DIN) | - |
-| (D2→D3) | D2.Pin2(DOUT) | D3.Pin4(DIN) | - |
 | KEY_MODE | U1.Pin12(IO8) | R4.1, SW2.1, C18.1 | R4.2→3V3, SW2.2→GND, C18.2→GND |
 | KEY_SELECT | U1.Pin15(IO3) | R5.1, SW3.1, C19.1 | R5.2→3V3, SW3.2→GND, C19.2→GND |
 | KEY_PLAY | U1.Pin27(IO0) | R6.1, SW4.1, C20.1 | R6.2→3V3, SW4.2→GND, C20.2→GND |
@@ -654,7 +703,7 @@
 
 ---
 
-## 十、元器件封装引脚标号表
+## 九、元器件封装引脚标号表
 
 > **说明**: 本表列出所有元器件的封装引脚标号，便于PCB布局和原理图绘制时参考。
 
@@ -668,9 +717,9 @@
 | 4 | IO4 | GPIO | I2C_SDA |
 | 5 | IO5 | GPIO | I2C_SCL |
 | 6 | IO6 | GPIO | MPU6050_INT |
-| 7 | IO7 | GPIO | I2S_SCK_MCU |
-| 8 | IO15 | GPIO | I2S_SD |
-| 9 | IO16 | GPIO | I2S_WS_MCU |
+| 7 | IO7 | GPIO | NC (预留) |
+| 8 | IO15 | GPIO | NC (预留) |
+| 9 | IO16 | GPIO | NC (预留) |
 | 10 | IO17 | GPIO | LCD_RST |
 | 11 | IO18 | GPIO | NC (USB_D-) |
 | 12 | IO8 | GPIO | KEY_MODE |
@@ -685,9 +734,9 @@
 | 21 | IO13 | GPIO | SPI_MOSI_MCU |
 | 22 | IO14 | GPIO | SPI_CS_LCD |
 | 23 | IO21 | GPIO | LED_DATA_MCU |
-| 24 | IO47 | GPIO | UART_TX |
-| 25 | IO48 | GPIO | UART_RX |
-| 26 | IO45 | GPIO | DFPLAYER_BUSY |
+| 24 | IO47 | GPIO | NC (预留) |
+| 25 | IO48 | GPIO | NC (预留) |
+| 26 | IO45 | GPIO | NC (预留) |
 | 27 | IO0 | GPIO | KEY_PLAY |
 | 28 | IO35_PSRAM | NC | PSRAM占用 |
 | 29 | IO36_PSRAM | NC | PSRAM占用 |
@@ -720,20 +769,25 @@
 | 6 | STDBY | 充满指示(开漏) | D5 LED (绿) |
 | 7 | CHRG | 充电指示(开漏) | D4 LED (红) |
 | 8 | CE | 芯片使能 | 5V_PROT |
+| 9 | EP | 散热焊盘 | GND |
 
-**封装**: SOIC-8 (SOP-8), 3.9×4.9mm, 引脚间距1.27mm
+**封装**: SOIC-8 (SOP-8), 3.9×4.9mm, 引脚间距1.27mm (9引脚含EP)
 
 ---
 
 ### 10.3 ME6211 LDO稳压器 (U5)
 
+型号 **ME6211C33M5G-N**，五脚封装（与原理图符号 LDO1 对应）。
+
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
 | 1 | VIN | 输入电压 | VBAT_SW |
-| 2 | VOUT | 稳压输出 | 3V3 |
-| 3 | VSS | 地 | GND |
+| 2 | VSS | 地 | GND |
+| 3 | CE | 芯片使能(高有效) | VBAT_SW（与 VIN 同电位，开关打开时使能） |
+| 4 | NC | 不连接 | 悬空 |
+| 5 | VOUT | 稳压输出 3.3V | 3V3 |
 
-**封装**: SOT-23-3, 2.9×1.6mm
+**封装**: SOT-23-5 或等效 5 脚, 2.9×1.6mm
 
 ---
 
@@ -761,14 +815,14 @@
 | 3 | 1Y | 通道1输出 | LED_DATA_5V |
 | 4 | 2OE | 通道2输出使能(低有效) | GND |
 | 5 | 2A | 通道2输入 | GND |
-| 6 | 2Y | 通道2输出 | NC |
+| 6 | 2Y | 通道2输出 | **NC (悬空)** |
 | 7 | GND | 地 | GND |
 | 8 | 3A | 通道3输入 | GND |
 | 9 | 3OE | 通道3输出使能(低有效) | 5V_PROT (禁用) |
-| 10 | 3Y | 通道3输出 | NC |
+| 10 | 3Y | 通道3输出 | **NC (悬空)** |
 | 11 | 4A | 通道4输入 | GND |
 | 12 | 4OE | 通道4输出使能(低有效) | 5V_PROT (禁用) |
-| 13 | 4Y | 通道4输出 | NC |
+| 13 | 4Y | 通道4输出 | **NC (悬空)** |
 | 14 | VCC | 电源 | 5V_PROT |
 
 **封装**: SOIC-14, 3.9×8.7mm, 引脚间距1.27mm
@@ -779,21 +833,28 @@
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
-| 1 | CLKIN | 外部时钟输入 | GND (不用) |
-| 2-5 | NC | 未内部连接 | NC |
-| 6 | AUX_DA | 辅助I2C数据 | NC |
-| 7 | AUX_CL | 辅助I2C时钟 | NC |
-| 8 | VLOGIC | 数字I/O参考电压 | 3V3 |
+| 1 | CLKIN | 外部时钟输入 | GND |
+| 2 | NC | 未内部连接 | **NC (悬空)** |
+| 3 | NC | 未内部连接 | **NC (悬空)** |
+| 4 | NC | 未内部连接 | **NC (悬空)** |
+| 5 | NC | 未内部连接 | **NC (悬空)** |
+| 6 | AUX_DA | 辅助I2C数据 | **NC (悬空)** |
+| 7 | AUX_CL | 辅助I2C时钟 | **NC (悬空)** |
+| 8 | VLOGIC | 数字I/O参考电压 | 3V3 + C_VLOGIC(100nF)→GND |
 | 9 | AD0 | I2C地址LSB | GND (地址=0x68) |
 | 10 | REGOUT | 内部稳压输出 | C_REG(100nF)→GND |
-| 11 | FSYNC | 帧同步输入 | GND (不用) |
+| 11 | FSYNC | 帧同步输入 | GND |
 | 12 | INT | 中断输出 | MPU6050_INT |
 | 13 | VDD | 主电源 | 3V3 |
-| 14-17 | NC | 未内部连接 | NC |
+| 14 | NC | 未内部连接 | **NC (悬空)** |
+| 15 | NC | 未内部连接 | **NC (悬空)** |
+| 16 | NC | 未内部连接 | **NC (悬空)** |
+| 17 | NC | 未内部连接 | **NC (悬空)** |
 | 18 | GND | 地 | GND |
-| 19 | RESV | 保留 | NC |
+| 19 | RESV | 保留 | **NC (悬空)** |
 | 20 | CPOUT | 电荷泵输出 | C_CP(2.2nF)→GND |
-| 21-22 | NC | 未内部连接 | NC |
+| 21 | NC | 未内部连接 | **NC (悬空)** |
+| 22 | NC | 未内部连接 | **NC (悬空)** |
 | 23 | SCL | I2C时钟 | I2C_SCL |
 | 24 | SDA | I2C数据 | I2C_SDA |
 | EP | GND | 散热焊盘 | GND |
@@ -808,16 +869,26 @@
 |---------|------|------|------|
 | 1 | GND | 地 | GND |
 | 2 | VCC | 电源 | 3V3 |
-| 3 | SCL | SPI时钟 | SPI_SCK |
+| 3 | CLK | SPI时钟 | SPI_SCK |
 | 4 | SDA | SPI数据 | SPI_MOSI |
 | 5 | RES | 复位(低有效) | LCD_RST |
 | 6 | DC | 数据/命令选择 | LCD_DC |
-| 7 | CS | 片选(低有效) | SPI_CS_LCD |
+| 7 | CS1 | 片选(低有效) | SPI_CS_LCD |
 | 8 | BLK | 背光控制 | 3V3 |
-| 9 | FSO | 字库数据输出 | NC |
-| 10 | FCS | 字库IC片选 | NC |
+| 9 | FS0 | 字库数据输出 | **NC (悬空)** |
+| 10 | FCS | 字库IC片选 | **NC (悬空)** |
+| 11 | VCC_B | 电源(下排) | 3V3 |
+| 12 | GND_B | 地(下排) | GND |
+| 13 | BLA | 背光阳极 | **NC (悬空)** |
+| 14 | FCS_B | 字库片选(下排) | **NC (悬空)** |
+| 15 | FS0_B | 字库数据(下排) | **NC (悬空)** |
+| 16 | CLK_B | SPI时钟(下排) | **NC (悬空)** |
+| 17 | SDA_B | SPI数据(下排) | **NC (悬空)** |
+| 18 | DC_B | 数据/命令(下排) | **NC (悬空)** |
+| 19 | RES_B | 复位(下排) | **NC (悬空)** |
+| 20 | CS1_B | 片选(下排) | **NC (悬空)** |
 
-**封装**: 10引脚排针, 2.54mm间距
+**封装**: 2×10 排针, 2.54mm 间距 (20引脚, 上下两排)
 
 ---
 
@@ -825,74 +896,50 @@
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
-| 1 | SHIELD | 屏蔽 | GND |
-| 2 | CS | 片选 | SPI_CS_SD |
-| 3 | GND | 地 | GND |
-| 4 | VCC | 电源 | 3V3 |
-| 5 | SCK | SPI时钟 | SPI_SCK |
-| 6 | NC | 未使用 | NC |
-| 7 | MOSI | SPI主出从入 | SPI_MOSI |
-| 8 | MISO | SPI主入从出 | SPI_MISO |
-| 9 | CD | 卡检测 | NC |
+| 1 | DAT2 | 数据线2 | **NC (悬空)** |
+| 2 | CD_DAT3 | 卡检测/数据3 | **NC (悬空)** |
+| 3 | CMD | 命令(SPI作CS) | SPI_CS_SD |
+| 4 | VDD | 电源 | 3V3 |
+| 5 | CLK | SPI时钟 | SPI_SCK |
+| 6 | VSS | 地 | GND |
+| 7 | DAT0 | 数据0 (SPI MISO) | SPI_MISO |
+| 8 | DAT1 | 数据1 (SPI MOSI) | SPI_MOSI |
+| 9 | SW_B | 开关B | **NC (悬空)** |
+| 10 | NC1 | 未标注 | **NC (悬空)** |
+| 11 | SW_A | 开关A | **NC (悬空)** |
+| 12 | NC2 | 未标注 | **NC (悬空)** |
+| 13 | NC3 | 未标注 | **NC (悬空)** |
+| 14 | NC4 | 未标注 | **NC (悬空)** |
 
-**封装**: Hirose DM3AT-SF-PEJM5
-
----
-
-### 10.9 DFPlayer Mini 音频模块 (U3)
-
-| 封装Pin | 名称 | 功能 | 连接 |
-|---------|------|------|------|
-| 1 | VCC | 电源 | 3V3 |
-| 2 | RX | UART接收 | UART_TX_PROT |
-| 3 | TX | UART发送 | UART_RX |
-| 4 | DAC_R | DAC右声道 | NC |
-| 5 | DAC_L | DAC左声道 | NC |
-| 6 | NC | 未使用 | NC |
-| 7 | GND | 地 | GND |
-| 8 | SPK1 | 扬声器1 | SPEAKER+ |
-| 9 | SPK2 | 扬声器2 | SPEAKER- |
-| 10 | NC | 未使用 | NC |
-| 11 | IO1 | GPIO1 | NC |
-| 12 | IO2 | GPIO2 | NC |
-| 13 | ADKEY1 | 按键1 | NC |
-| 14 | ADKEY2 | 按键2 | NC |
-| 15 | USB_P | USB+ | NC |
-| 16 | BUSY | 播放状态 | DFPLAYER_BUSY |
-
-**封装**: 16引脚排针, 2.54mm间距
+**封装**: Hirose DM3AT-SF-PEJM5, 14引脚
 
 ---
 
-### 10.10 INMP441 MEMS麦克风 (MIC1)
+### 10.9 串口调试与固件烧录（USB 复用）
 
-| 封装Pin | 名称 | 功能 | 连接 |
-|---------|------|------|------|
-| 1 | VDD | 电源 | 3V3 |
-| 2 | GND | 地 | GND |
-| 3 | SCK | I2S时钟 | I2S_SCK |
-| 4 | SD | I2S数据 | I2S_SD |
-| 5 | WS | I2S字选择 | I2S_WS |
-| 6 | L_R | 声道选择 | GND |
+串口调试与固件烧录/升级均通过 **现有 USB (J2)** 完成，无需独立 UART 排针或 USB 转 TTL 模块。**当前项目为“USB 连电脑”方式做调试与固件更新，非无线 OTA。**
 
-**封装**: 6引脚排针, 2.54mm间距
+- **路径**: J2(Type-C) D+/D- → U6(ESD) → R18/R19(22Ω) → U1.Pin14(IO20)/Pin13(IO19)
+- **串口**: ESP32-S3 内置 USB Serial/JTAG，连接电脑后枚举为 CDC 串口；`Serial` 默认经此 USB 输出。
+- **烧录**: 同一 USB 支持进入下载模式，用 Arduino“上传”、`idf.py flash`、esptool 等通过 Type-C 线烧录/升级固件。
+- **使用**: Type-C 线连接魔杖与电脑 → 串口监视器查看打印，或运行烧录工具更新固件。
 
 ---
 
-### 10.11 WS2812B RGB LED (D1/D2/D3)
+### 10.10 WS2812B RGB LED (D1，单颗)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
 | 1 | VDD | 电源 | 5V_PROT |
-| 2 | DOUT | 数据输出 | 下一级DIN (D1→D2→D3) |
+| 2 | DOUT | 数据输出 | NC (悬空，无级联) |
 | 3 | GND | 地 | GND |
-| 4 | DIN | 数据输入 | LED_DATA_5V (D1) / 上一级DOUT |
+| 4 | DIN | 数据输入 | LED_DATA_5V (经 U7 电平转换) |
 
 **封装**: PLCC-4, 5.0×5.0mm, 引脚间距3.2mm
 
 ---
 
-### 10.12 USB Type-C 母座 (J2)
+### 10.11 USB Type-C 母座 (J2)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -918,7 +965,7 @@
 
 ---
 
-### 10.13 PTC自恢复保险丝 (F1)
+### 10.12 PTC自恢复保险丝 (F1)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -931,7 +978,7 @@
 
 ---
 
-### 10.14 LED指示灯 (D4/D5)
+### 10.13 LED指示灯 (D4/D5)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -944,21 +991,26 @@
 
 ---
 
-### 10.15 电源开关 (SW1)
+### 10.14 电源开关 (SW1)
+
+型号 **MSK12C02**，四脚 **SP3T**（单刀三掷）：**Pin4 为公共端(COM)**，Pin1/Pin2/Pin3 为三档位。本电路仅用其中一档接 VBAT_SW（如 Pin2 为“开”），其余两档悬空。
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
-| 1 | COM | 公共端 | VBAT |
-| 2 | NO | 常开端 | VBAT_SW |
-| 3 | NC | 常闭端 | NC (悬空) |
+| 1 | 档位1 | OFF 位 | NC (悬空) |
+| 2 | 档位2 | ON 位 | VBAT_SW |
+| 3 | 档位3 | OFF 位 | NC (悬空) |
+| 4 | COM | 公共端 | VBAT（电池正） |
 
-**封装**: MSK-12C02, SMD滑动开关
+**注意**：若原理图符号内部画有 GND 标识，多为库符号误绘或机械地；**切勿将 Pin4(COM) 接 GND**，否则会短路电池。
 
-**规格**: SPDT, 0.3A, 6V DC
+**封装**: MSK12C02, SMD 滑动开关, 4 脚
+
+**规格**: SP3T, 0.3A, 6V DC
 
 ---
 
-### 10.16 按键开关 (SW2/SW3/SW4)
+### 10.15 按键开关 (SW2/SW3/SW4)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -969,7 +1021,7 @@
 
 ---
 
-### 10.17 电阻 (R1-R20)
+### 10.16 电阻 (R1-R17)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -986,14 +1038,13 @@
 - R8/R9: 5.1KΩ (USB CC下拉)
 - R10: 2KΩ (TP4056 PROG)
 - R11/R12: 1KΩ (LED限流)
-- R13/R14/R15/R16: 33Ω (SPI/I2S阻尼)
+- R13/R14: 33Ω (SPI SCK/MOSI 阻尼)
 - R17: 100Ω (LED数据串联)
 - R18/R19: 22Ω (USB数据串联)
-- R20: 1KΩ (DFPlayer RX保护)
 
 ---
 
-### 10.18 电容 (C1-C20, C_EN, C_BAT, C_CP, C_REG)
+### 10.17 电容 (C1-C20, C_EN, C_BAT, C_CP, C_REG)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -1008,7 +1059,7 @@
 - 22uF: SMD 0805, 2.0×1.2mm
 
 **容值**:
-- C1/C2/C4/C5/C7/C8/C9/C10/C11/C12/C13/C16: 100nF (去耦)
+- C1/C2/C4/C5/C9/C10/C11/C16: 100nF (去耦)
 - C3/C6/C14/C15/C17: 10uF (滤波)
 - C_BAT: 10uF (TP4056 BAT去耦)
 - C_EN: 1uF (ESP32 EN复位延迟)
@@ -1019,7 +1070,7 @@
 
 ---
 
-### 10.19 电池 (BT1)
+### 10.18 电池 (BT1)
 
 | 封装Pin | 名称 | 功能 | 连接 |
 |---------|------|------|------|
@@ -1027,17 +1078,6 @@
 | 2 | - | 负极 | GND |
 
 **规格**: 603040, 3.7V, 800mAh, 锂电池
-
----
-
-### 10.20 扬声器 (LS1)
-
-| 封装Pin | 名称 | 功能 | 连接 |
-|---------|------|------|------|
-| 1 | + | 正极 | DFPlayer SPK1 |
-| 2 | - | 负极 | DFPlayer SPK2 |
-
-**规格**: 8Ω, 0.5W
 
 ---
 
