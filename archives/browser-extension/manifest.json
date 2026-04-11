@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "OpenClaw Browser Relay",
+  "version": "1.0.0",
+  "description": "Allow OpenClaw to control this browser tab for automation tasks",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "debugger"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OpenClaw Browser Relay"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

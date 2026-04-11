@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Browser Relay</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .status-card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 12px;
+      padding: 15px;
+      margin: 15px 0;
+      color: #333;
+    }
+    
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    
+    .indicator {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ccc;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .indicator.active {
+      background: #07c160;
+      box-shadow: 0 0 10px #07c160;
+    }
+    
+    .status-text {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    
+    .button {
+      width: 100%;
+      padding: 14px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .button-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+    
+    .button-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    
+    .button-primary:active {
+      transform: translateY(0);
+    }
+    
+    .button-secondary {
+      background: white;
+      color: #667eea;
+    }
+    
+    .button-secondary:hover {
+      background: #f8f9ff;
+    }
+    
+    .tab-info {
+      background: rgba(255,255,255,0.9);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 15px;
+      font-size: 12px;
+      color: #333;
+    }
+    
+    .tab-url {
+      color: #666;
+      word-break: break-all;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    
+    .hint {
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 15px;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">🔌 OpenClaw Relay</div>
+  </div>
+  
+  <div class="status-card">
+    <div class="status-row">
+      <div class="indicator" id="statusIndicator"></div>
+      <div class="status-text" id="statusText">未连接</div>
+    </div>
+  </div>
+  
+  <button class="button button-primary" id="activateBtn">
+    ✨ 激活当前标签
+  </button>
+  
+  <button class="button button-secondary" id="deactivateBtn">
+    ⏸ 停用
+  </button>
+  
+  <div class="tab-info" id="tabInfo" style="display: none;">
+    <div><strong>当前标签:</strong></div>
+    <div class="tab-url" id="tabUrl"></div>
+    <div style="margin-top: 6px; color: #999;" id="tabTitle"></div>
+  </div>
+  
+  <div class="hint">
+    💡 激活后徽章变绿，OpenClaw 即可控制此页面
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

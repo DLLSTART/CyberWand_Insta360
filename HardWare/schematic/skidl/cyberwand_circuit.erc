@@ -1,0 +1,60 @@
+ERC WARNING: Insufficient drive current on net VBAT_SW for pin POWER-IN pin 1/VIN of ME6211A33/U5.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 14/VCC of SN74AHCT125/U7.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 1/VDD of WS2812B/D3.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 4/VCC of TP4056/U4.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 1/VDD of WS2812B/D1.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 5/VBUS of USBLC6-2SC6/U6.
+ERC WARNING: Insufficient drive current on net 5V_PROT for pin POWER-IN pin 1/VDD of WS2812B/D2.
+ERC WARNING: Insufficient drive current on net 5V for pin POWER-IN pin B4/VBUS_B4 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net 5V for pin POWER-IN pin A4/VBUS_A4 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/GND of TP4056/U4.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/GND of MicroSD_Socket/J1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 1/GND1 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 1/GND of HS20S010B_LCD/LCD1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/GND of WS2812B/D3.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin A1/GND_A1 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 40/GND2 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin B1/GND_B1 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 41/EPAD of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin A12/GND_A12 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/GND of WS2812B/D1.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin B12/GND_B12 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 7/GND of SN74AHCT125/U7.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/VSS of ME6211A33/U5.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 7/GND of DFPlayer_Mini/U3.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 3/GND of WS2812B/D2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 2/GND of USBLC6-2SC6/U6.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 18/GND of MPU-6050/U2.
+ERC WARNING: Insufficient drive current on net GND for pin POWER-IN pin 2/GND of INMP441/MIC1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 11/IO18 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 31/IO38 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 32/IO39 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 33/IO40 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 34/IO41 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 35/IO42 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 36/RXD0 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 37/TXD0 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 38/IO2 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 39/IO1 of ESP32-S3-WROOM-1/U1.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 6/AUX_DA of MPU-6050/U2.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 7/AUX_CL of MPU-6050/U2.
+ERC WARNING: Unconnected pin: OUTPUT pin 9/FSO of HS20S010B_LCD/LCD1.
+ERC WARNING: Unconnected pin: INPUT pin 10/FCS of HS20S010B_LCD/LCD1.
+ERC WARNING: Unconnected pin: PASSIVE pin 9/CD of MicroSD_Socket/J1.
+ERC WARNING: Unconnected pin: OUTPUT pin 4/DAC_R of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: OUTPUT pin 5/DAC_L of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 11/IO1 of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 12/IO2 of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: INPUT pin 13/ADKEY1 of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: INPUT pin 14/ADKEY2 of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin 15/USB_P of DFPlayer_Mini/U3.
+ERC WARNING: Unconnected pin: OUTPUT pin 2/DOUT of WS2812B/D3.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin A8/SBU1 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Unconnected pin: BIDIRECTIONAL pin B8/SBU2 of USB_C_Receptacle_USB2.0/J2.
+ERC WARNING: Unconnected pin: OUTPUT pin 6/2Y of SN74AHCT125/U7.
+ERC WARNING: Unconnected pin: OUTPUT pin 10/3Y of SN74AHCT125/U7.
+ERC WARNING: Unconnected pin: OUTPUT pin 13/4Y of SN74AHCT125/U7.
+ERC WARNING: Unconnected pin: PASSIVE pin 3/NC of SW_SPDT/SW1.
+ERC INFO: 57 warnings found while running ERC.
+ERC INFO: 0 errors found while running ERC.
+

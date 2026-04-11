@@ -1,0 +1,11 @@
+# CyberWand Control Center - 依赖清单
+
+# 核心依赖
+PySide6>=6.6.0          # Qt6 for Python
+bleak>=0.22.0           # BLE 5.3 library
+pyqtgraph>=0.13.0       # 实时数据可视化
+qasync>=0.27.0          # asyncio + Qt event loop
+numpy>=1.26.0           # 数值计算
+
+# 可选依赖
+pyserial>=3.5           # 串口通信（备用）

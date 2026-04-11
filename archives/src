@@ -1,0 +1,96 @@
+/**
+ * CyberWand 固件 - 头文件集合
+ */
+
+#ifndef CYBERWAND_H
+#define CYBERWAND_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "esp_err.h"
+
+// ================= 数据结构 =================
+
+/**
+ * IMU 数据结构
+ */
+typedef struct {
+    int16_t ax, ay, az;     // 加速度计 (mg)
+    int16_t gx, gy, gz;     // 陀螺仪 (mdps)
+    uint32_t timestamp;     // 时间戳 (ms)
+} imu_data_t;
+
+/**
+ * 姿态类型
+ */
+typedef enum {
+    POSE_IDLE = 0,          // 空闲
+    POSE_WAVE,              // 挥手
+    POSE_FIST,              // 握拳
+    POSE_ROTATE_LEFT,       // 左旋转
+    POSE_ROTATE_RIGHT,      // 右旋转
+    POSE_TILT_UP,           // 上倾斜
+    POSE_TILT_DOWN,         // 下倾斜
+    POSE_COUNT
+} pose_type_t;
+
+/**
+ * 按键事件
+ */
+typedef enum {
+    KEY_NONE = 0,
+    KEY_SHORT_PRESS,    // 短按 (<2s)
+    KEY_LONG_PRESS,     // 长按 (≥2s)
+    KEY_LONG_RELEASE    // 长按释放
+} key_event_t;
+
+/**
+ * LED 模式
+ */
+typedef enum {
+    LED_IDLE = 0,       // 闪烁
+    LED_RECORD,         // 常亮
+    LED_CONTROL,        // 慢闪
+    LED_TRANSFER,       // 快闪
+    LED_ERROR           // 错误
+} led_pattern_t;
+
+/**
+ * 蓝牙消息结构
+ */
+typedef struct {
+    uint8_t header;         // 0xAA
+    uint8_t pose_id;        // 姿态 ID
+    uint8_t timestamp;      // 时间戳
+    uint8_t checksum;       // 校验和
+} ble_message_t;
+
+// ================= 函数声明 =================
+
+// mpu6050.c
+esp_err_t mpu6050_init(void);
+esp_err_t mpu6050_read(imu_data_t* data);
+
+// usb_serial.c
+esp_err_t usb_serial_init(void);
+int usb_serial_send_imu(imu_data_t* data);
+uint8_t calculate_checksum(uint8_t* data, int len);
+
+// ble_comm.c
+esp_err_t ble_comm_init(void);
+esp_err_t ble_comm_send_pose(pose_type_t pose);
+
+// button.c
+void button_init(void);
+key_event_t button_get_event(void);
+void button_simulate_press(int ms);
+
+// led.c
+void led_init(void);
+void led_set(led_pattern_t pattern);
+
+// pose_model.c
+pose_type_t pose_recognize(imu_data_t* current, imu_data_t* history);
+bool pose_changed(pose_type_t new_pose, pose_type_t old_pose);
+
+#endif // CYBERWAND_H
