@@ -14,6 +14,7 @@ Mpu6050IMU::Mpu6050IMU() : BaseIMU() {
 void Mpu6050IMU::Init() {
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
     Wire.begin(); 
+    Wire.setClock(400000);
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
     Fastwire::setup(400, true);
     #endif
@@ -26,12 +27,22 @@ void Mpu6050IMU::Init() {
         Serial.println("MPU6050 connection successful");
     }
 
-    mpu.setXAccelOffset(0); //Set your accelerometer offset for axis X
-    mpu.setYAccelOffset(0); //Set your accelerometer offset for axis Y
-    mpu.setZAccelOffset(0); //Set your accelerometer offset for axis Z
-    mpu.setXGyroOffset(0);  //Set your gyro offset for axis X
-    mpu.setYGyroOffset(0);  //Set your gyro offset for axis Y
-    mpu.setZGyroOffset(0);  //Set your gyro offset for axis Z
+    // mpu.setXAccelOffset(0); //Set your accelerometer offset for axis X
+    // mpu.setYAccelOffset(0); //Set your accelerometer offset for axis Y
+    // mpu.setZAccelOffset(0); //Set your accelerometer offset for axis Z
+    // mpu.setXGyroOffset(0);  //Set your gyro offset for axis X
+    // mpu.setYGyroOffset(0);  //Set your gyro offset for axis Y
+    // mpu.setZGyroOffset(0);  //Set your gyro offset for axis Z
+
+    // 1. 临时将加速度计设为默认的 ±2g 量程，迎合校准函数的胃口
+    // mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2); 
+    
+    // 2. 确保此时传感器绝对平放、静止，并且芯片正面朝上！然后执行校准
+    mpu.CalibrateAccel(6);
+    mpu.CalibrateGyro(6);
+    
+    // 3. 校准完成后，切回你项目需要的 ±4g 量程
+    // mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
 }
 
 void Mpu6050IMU::Init(uint16_t sample_period_ms, uint16_t sample_count) {
@@ -69,7 +80,7 @@ const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count) {
         imus_[sampled_index].gyro.pitch = gy / IMU_GYRO_TRANS_RADIAN_CONSTANT;
         imus_[sampled_index].gyro.yaw = gz / IMU_GYRO_TRANS_RADIAN_CONSTANT;
 
-        #if defined(CY_DEBUG)
+        // #if defined(CY_DEBUG)
         // ILOGT("[%d] %f",sampled_index, imus_[sampled_index].acc.x); ILOGT("\t");
             ILOGT("%f",imus_[sampled_index].acc.x); ILOGT("\t");
             ILOGT("%f",imus_[sampled_index].acc.y); ILOGT("\t");
@@ -77,7 +88,7 @@ const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count) {
             ILOGT("%f",imus_[sampled_index].gyro.roll); ILOGT("\t");
             ILOGT("%f",imus_[sampled_index].gyro.pitch); ILOGT("\t");
             ILOGT("%f\n",imus_[sampled_index].gyro.yaw);
-        #endif
+        // #endif
 
         sampled_index++;
         SleepMs(sleep_ms);

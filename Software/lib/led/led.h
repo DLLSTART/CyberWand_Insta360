@@ -41,7 +41,7 @@ public:
     static LedManager& GetInstance();
 
     void AddLed(uint8_t pin, LedType t, bool active_level = HIGH);
-    void Begin(UBaseType_t priority = 4, BaseType_t coreId = 1);
+    void Begin(UBaseType_t priority = 1, BaseType_t coreId = 1);
     
     // 修改：支持传入持续时间(毫秒)和回退模式。默认 duration_ms=0 表示永久运行
     void SetMode(LedType t, LedMode mode, uint32_t duration_ms = 0, LedMode fallback = LedMode::Off);

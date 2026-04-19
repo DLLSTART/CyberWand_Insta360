@@ -23,16 +23,26 @@ bool ActionRecognitionCNN::Init() {
 
 ActionType ActionRecognitionCNN::PredictBlock(const cw::common::IMU* input_data, uint16_t length) {
     if (model_ == nullptr) {
-        return ActionType::kNoMotion;
+        return ActionType::kUnknown;
     }
-    ILOGT("length: %d\n", length);
 	for(uint16_t i = 0; i < length;i++){
-		nnom_input_data[i*3]   = (int8_t)round(input_data[i].gyro.roll  * kQuantificationScale);
-		nnom_input_data[i*3+1] = (int8_t)round(input_data[i].gyro.pitch * kQuantificationScale);
-		nnom_input_data[i*3+2] = (int8_t)round(input_data[i].gyro.yaw   * kQuantificationScale);
+		// nnom_input_data[i*3]   = (int8_t)round(input_data[i].acc.x  * kQuantificationScale);
+		// nnom_input_data[i*3+1] = (int8_t)round(input_data[i].acc.y * kQuantificationScale);
+		// nnom_input_data[i*3+2] = (int8_t)round(input_data[i].acc.z   * kQuantificationScale);
+
+		// nnom_input_data[i*3]   = (int8_t)round(input_data[i].gyro.roll  * kQuantificationScale);
+		// nnom_input_data[i*3+1] = (int8_t)round(input_data[i].gyro.pitch * kQuantificationScale);
+		// nnom_input_data[i*3+2] = (int8_t)round(input_data[i].gyro.yaw   * kQuantificationScale);
+
+		nnom_input_data[i*6]   = (int8_t)round(input_data[i].acc.x  * kQuantificationScale);
+		nnom_input_data[i*6+1] = (int8_t)round(input_data[i].acc.y * kQuantificationScale);
+		nnom_input_data[i*6+2] = (int8_t)round(input_data[i].acc.z   * kQuantificationScale);
+		nnom_input_data[i*6+3]   = (int8_t)round(input_data[i].gyro.roll  * kQuantificationScale);
+		nnom_input_data[i*6+4] = (int8_t)round(input_data[i].gyro.pitch * kQuantificationScale);
+		nnom_input_data[i*6+5] = (int8_t)round(input_data[i].gyro.yaw   * kQuantificationScale);
 	}
     if (!RunModel()) {
-        return ActionType::kNoMotion;
+        return ActionType::kUnknown;
     }
     return action_type_;
 }
@@ -42,7 +52,7 @@ bool ActionRecognitionCNN::RunModel() {
     int8_t* output = (int8_t*)nnom_output_data;
     uint8_t max_index = 0;
     int8_t max_value = output[0];
-    for (uint8_t i = 0; i < static_cast<uint8_t>(ActionType::kNoMotion) + 1; i++) {
+    for (uint8_t i = 0; i < static_cast<uint8_t>(ActionType::kMax); i++) {
         // #if defined(CY_DEBUG)
         ILOGT("output[%d] = %d\n", i, (output[i] / 127) * 100); // 输出值归一化为百分比显示
         // #endif
@@ -54,7 +64,7 @@ bool ActionRecognitionCNN::RunModel() {
     if (max_value > kThreshold) {
         action_type_ = static_cast<ActionType>(max_index);
     } else {
-        action_type_ = ActionType::kNoMotion;
+        action_type_ = ActionType::kUnknown;
     }
     return true;
 }
