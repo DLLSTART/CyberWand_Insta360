@@ -52,7 +52,7 @@ public:
     static ButtonManager& GetInstance();
 
     void AddButton(uint8_t pin, ButtonType t, bool active_level = LOW);
-    void Begin(UBaseType_t priority = 5, BaseType_t coreId = 1);
+    void Begin(UBaseType_t priority = 1, BaseType_t coreId = 1);
     bool GetEvent(ButtonMessage& message, TickType_t waitTicks = portMAX_DELAY);
 };
 

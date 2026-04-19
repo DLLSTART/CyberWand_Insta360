@@ -14,18 +14,18 @@ from sklearn.metrics import classification_report
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 # 动作分类名
-motion_names = ['Lightning','Click','NoMotion']
+motion_names = ['Circle_Cw','Circle_Aw','Check','Cross_Left','Cross_Right','Unknown']
 
 # 定义目录路径
-DEF_SAVE_TO_PATH = 'F:/CyberWand/CyberWand_lsc/CyberWand_Lsc/TraningData_2_9'
+DEF_SAVE_TO_PATH = 'F:/CyberWand/CyberWand_Insta360/Software/TraningData_4_19'
 DEF_MODEL_NAME = 'model.h5'
 DEF_MODEL_H_NAME = 'weights.h'
 DEF_FILE_MAX = 1000
 DEF_MAX_TRIALS = 3
 #DEF_N_ROWS = 60
 DEF_N_ROWS = 150                                                                                                                 
-#DEF_COLUMNS = (0, 1, 2, 3, 4, 5)   #加速度和角速度
-DEF_COLUMNS = (3, 4, 5)    #角速度                                                                                                                                                              
+DEF_COLUMNS = (0, 1, 2, 3, 4, 5)   #加速度和角速度
+# DEF_COLUMNS = (3, 4, 5)    #角速度                                                                                                                                                              
 #DEF_COLUMNS = (0, 1, 2)   #加速度
 
 # 文件格式
@@ -33,12 +33,12 @@ DEF_FILE_FORMAT = '.txt'
 # 文件名分隔符
 DEF_FILE_NAME_SEPERATOR = '_'
 DEF_BATCH_SIZE = 100     #批量大小
-DEF_NUM_EPOCH = 80       #训练轮数
+DEF_NUM_EPOCH = 150       #训练轮数
 
 # 动作名称到标签的映射
 motion_to_label = {name: idx for idx, name in enumerate(motion_names)}
 
-def train(x_train, y_train, x_test, y_test, input_shape=(DEF_N_ROWS, 3), num_classes=len(motion_names), batch_size=DEF_BATCH_SIZE, epochs=DEF_NUM_EPOCH):
+def train(x_train, y_train, x_test, y_test, input_shape=(DEF_N_ROWS, 6), num_classes=len(motion_names), batch_size=DEF_BATCH_SIZE, epochs=DEF_NUM_EPOCH):
     inputs = layers.Input(shape=input_shape) # type: ignore
 
     # 一维卷积层 第一个参数是滤波器数量，第二个参数是卷积核大小，第三个参数是步长，第四个参数是填充方式

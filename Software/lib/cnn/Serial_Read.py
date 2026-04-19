@@ -15,8 +15,8 @@ DEF_SAVE_TO_PATH = './TraningData'+DEF_FILE_NAME_SEPERATOR + DEF_TIME_MONTH + DE
 DEF_FILE_FORMAT = '.txt'
 DEF_TITLE_STRING = 'Sampleing\n'
 DEF_BAUD_RATE = 115200
-
-motion_name = ['Lightning','Click','NoMotion']
+# 顺时针， 逆时针
+motion_name = ['Circle_Cw','Circle_Aw','Check','Cross_Left','Cross_Right','Unknown']
 port_list = list(serial.tools.list_ports.comports())
 
 #显示所有可用串口
