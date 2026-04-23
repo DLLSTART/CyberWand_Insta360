@@ -5,10 +5,26 @@ __pycache__/
 *.so
 .Python
 
-# SKiDL 临时文件和输出
+# SKiDL 临时文件和输出（新路径：HardWare/schematic/skidl/）
+HardWare/schematic/skidl/output/
+HardWare/schematic/skidl/__pycache__/
+HardWare/schematic/skidl/docs/
+# 保留旧路径兼容（防止历史目录复现）
 schematic/skidl/output/
 schematic/skidl/__pycache__/
 schematic/skidl/docs/
+
+# PlatformIO 编译产物
+Software/.pio/
+Software/.pioenvs/
+Software/.piolibdeps/
+Software/build/
+.pio/
+
+# CMake / C++ 编译产物
+build/
+CMakeCache.txt
+CMakeFiles/
 
 # IDE
 .vscode/
