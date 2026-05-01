@@ -42,7 +42,7 @@ CyberWand_Insta360/
 ├── host_program/
 │   └── cyberwand_gui/              # PyQt 上位机（BLE 连接 + 手势配置）
 ├── userstory/userstory.md          # 用户故事 / 需求文档
-├── enclosure/                      # 外壳渲染图
+├── enclosure/                      # 3D 外壳设计（v4 葡萄藤雕花魔杖 elder_wand.scad / elder_wand_design.md）
 ├── doc/                            # 芯片手册（ESP32 / MPU6050 / TP4056 / USB）
 └── archives/                       # 历史版本归档
 ```

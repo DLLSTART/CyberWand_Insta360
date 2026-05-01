@@ -42,3 +42,6 @@ Thumbs.db
 
 # 硬件设计文档（本地生成）
 HardWare/docs/
+
+# 3D 外壳渲染/STL 生成产物
+enclosure/output/
