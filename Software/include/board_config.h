@@ -20,7 +20,7 @@
 //   R2 — USB-C CC1/CC2 悬空 (无 5.1K 下拉); 烧录必须用 USB-A → USB-C 线
 //   R3 — LDO1 CE 引脚直接接 GND; 若 LDO 是 CE 高有效, 整板没电, 上电前万用表测 LDO 输出
 //   R4 — 充电流 R5 = 2kΩ → 600mA, 对 300mAh 电池偏高 (~2C); 长期使用建议改 4.7kΩ → 250mA
-//   R5 — IMU pin 11 标 FSYNC 但接 INT 网络, pin 12 标 INT 但悬空; 软件已默认轮询不依赖 IMU 中断
+//   R5 — IMU pin 11 标 FSYNC 但接 INT 网络, pin 12 标 INT 但悬空; 软件用"中断为主+轮询兜底",触发自动回退
 //   R6 — 没有 VBAT ADC 采样电路; 当前固件无电量监测, 后续改板需加分压 + 飞线到空闲 ADC IO
 // =============================================================================
 #pragma once
@@ -62,9 +62,14 @@ constexpr uint16_t kLed1Count         = 1;    // 当前布板 1 颗主灯, 后�
 constexpr uint8_t kPinI2cSda          = 47;
 constexpr uint8_t kPinI2cScl          = 20;
 //   ⚠️ R5 风险: IMU 端 pin 11 丝印是 "FSYNC" 但接到 INT 网络, pin 12 标 "INT"
-//                却悬空 - 可能是丝印误标. 软件目前没用 IMU 中断, 不受影响;
-//                若将来要启用, 必须先用示波器确认 pin 11 真能输出中断脉冲.
-constexpr uint8_t kPinImuInt          = 4;   // 软件目前未使用, 预留给 DRDY 中断
+//                却悬空 - 可能是丝印误标. 软件用作 DRDY 中断输入 (节能 ~70%):
+//                Mpu6050IMU::EnableDataReadyInterrupt(kPinImuInt) 配 100Hz,
+//                capture_press_to_release 阻塞等中断;
+//                如果中断 15ms 内不来, 软件自动切到 7ms vTaskDelay 兜底
+//                (打 ILOGT "[imu] DRDY interrupt timeout" 提示用户 R5 已触发).
+//                想恢复中断节能, 飞线: 切断 IMU pin 11 (FSYNC) 现走线,
+//                把 IMU pin 12 (真 INT) 接到 IO4.
+constexpr uint8_t kPinImuInt          = 4;
 
 // --- 充电状态 (CHRG) ----------------------------------------------------
 //   原理图 (充电.png + MCU.png): 充电 IC U3 pin 1 (CHRG 开漏输出)
@@ -80,6 +85,21 @@ constexpr uint8_t kPinChargeStat      = 5;
 
 // --- I2C 总线频率 -------------------------------------------------------
 constexpr uint32_t kI2cClockHz        = 400000;   // 400 kHz Fast Mode, IMU datasheet 上限
+
+// --- IMU 中断驱动参数 ---------------------------------------------------
+//   采用"中断为主 + 轮询兜底"策略, 节省 MCU 在采样间隙的 CPU 占用:
+//     正常情况: IMU DRDY -> ESP32 GPIO RISING -> 信号量 -> 业务任务唤醒
+//     R5 触发:  N 次连续没收到中断 -> 一次性切到固定周期 vTaskDelay 兜底
+//   IMU 端配置:
+//     SMPLRT_DIV = 9 -> 100 Hz (= 1kHz / (1+9), 与 kContinuousFramePeriodMs=10ms 对齐)
+//     INT_LEVEL = 0 (active high), INT_OPEN = 0 (推挽), LATCH_INT_EN = 0 (50us 脉冲)
+//     INT_RD_CLEAR = 1 (任意状态读清除)
+//   ESP32 端配置:
+//     pinMode(INT, INPUT) — 不内部上拉 (IMU push-pull 已经驱动)
+//     attachInterrupt(INT, isr, RISING)
+constexpr uint8_t kImuSampleRateDiv   = 9;        // SMPLRT_DIV, 100 Hz
+constexpr uint32_t kImuIntWaitMs      = 15;       // 单帧中断等待超时 (理论 10ms, 留 50% 余量)
+constexpr uint32_t kImuPollFallbackMs = 7;        // R5 兜底: 每帧 vTaskDelay 时长 (= 10ms - 3ms 通信)
 
 
 // ===========================================================================

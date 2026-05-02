@@ -38,7 +38,7 @@
 | **R2** | USB-C CC1 / CC2 悬空 | 用 USB-C → USB-C 线接电脑 | 电脑不识别, VBUS 没有 5V | **改用 USB-A → USB-C 线**; 后续改板加 5.1K 双下拉 |
 | **R3** | LDO1 CE 引脚接 GND | 上电瞬间断电状态下测 LDO1 pin 3 (CE) → GND 通断, 上电后测 pin 5 (VOUT) | VOUT 长期 0V → CE 高有效, LDO 关断 | 飞线把 CE 改接 VIN; 或换 CE 低有效的 LDO |
 | **R4** | 充电电流 600mA 偏高 (300mAh @ 2C) | USB 充电时电池温度 (热成像 / 手摸) | 电池 > 45°C 长时间发热 | 把 R5 (PROG) 从 2 kΩ 换成 4.7 kΩ → 250mA, 或换 800mAh+ 大容量电池 |
-| **R5** | IMU pin 11 标 FSYNC 但接 INT 网络 | 烧 IMU INT 中断测试程序看 IO4 是否有脉冲 | IO4 永远静默 | 软件已默认走纯轮询 (不依赖中断), 不需要任何动作 |
+| **R5** | IMU pin 11 标 FSYNC 但接 INT 网络 | **不需要单独写测试**: 直接跑业务固件, 串口看是否在 PressDown 后 5 秒内打印 `[imu] DRDY interrupt timeout at frame X, fallback to polling` | 出现这行日志 = R5 已触发 (中断永不来) | 业务正常工作, 但每帧浪费 ~7ms idle 不能让 CPU 进低功耗; 想恢复中断节能, 飞线: 切断 IMU pin 11 (FSYNC) 现走线, 把 IMU pin 12 (真 INT) 接到 IO4 |
 | **R6** | 没有 VBAT ADC 采样 | — | 软件读不到电池电量 | 后续改板加 VBAT 100K + 100K 分压 + 飞线到 IO6/IO7 等空闲 ADC1 IO |
 
 ---
@@ -337,6 +337,10 @@ MPU6050 connection successful           ← 即便 IC 是 ICM 兼容, MPU6050 �
 - [ ] **双击切模式**: 双击按键 → LED **蓝色快闪 2 秒** + 串口 `[main] mode -> Acquisition`; 再双击 → LED **绿色长亮 3 秒** + `[main] mode -> Application`
 - [ ] **BLE 广播**: 用手机 nRF Connect 扫描看到外设名 (开发期 `Insta360 GPS Remote` / 开源版 `CyberWand`)
 - [ ] **BLE 命令下发**: 连上相机后挥圆圈 → 串口 `[main] gesture circle -> cmd sent OK`
+- [ ] **R5 风险现场判定**:
+      - 按下按键 (任意一次手势) → 立即看串口前几行
+      - 若 **没有** 出现 `[imu] DRDY interrupt timeout` → ✅ 中断走通了, 中断驱动模式正常工作 (CPU 在采样间隙可以让出给其他任务)
+      - 若 **出现** `[imu] DRDY interrupt timeout at frame X, fallback to polling` → ⚠️ R5 触发, 但软件已自动回退到 7ms 轮询, 业务功能完全正常 (只是没节能), 处置见 §1 表格 R5 行
 
 ### 7.4 端到端失败诊断 (基于本固件特点)
 
@@ -370,7 +374,7 @@ MPU6050 connection successful           ← 即便 IC 是 ICM 兼容, MPU6050 �
 | 🟡 中 | 验证 LDO 实际型号后, 决定 CE 接 VIN 还是保持 GND | 消除 R3 风险 |
 | 🟡 中 | 加 VBAT 分压电路 (R'1=R'2=100K + 飞线到 IO6) | 实现电量监测, 消除 R6 风险 |
 | 🟢 低 | R5 改 4.7 kΩ (250 mA 充电) 或换更大电池 | 延长电池寿命, 消除 R4 风险 |
-| 🟢 低 | IMU pin 11/12 标号修正, 走线到正确的 INT 输出 | 消除 R5 风险, 启用 DRDY 中断 |
+| 🟢 低 | IMU pin 11/12 标号修正, 走线到正确的 INT 输出 | 消除 R5 风险, 启用 DRDY 中断节能 (CPU 在采样间隙可让出给 BLE / light sleep) |
 
 ---
 

@@ -4,6 +4,9 @@
 #include "I2Cdev.h"
 #include "MPU6050.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 namespace cw {
 namespace imu {
 #define IMU_SAMPLING_TIME_MS (1500)
@@ -75,6 +78,44 @@ public:
      * 调用方负责自身的写入边界管理.
      */
     common::IMU* GetContinuousBuffer(uint16_t& out_capacity);
+
+    /**
+     * @brief  启用 IMU DRDY (数据就绪) 中断驱动模式.
+     *
+     * 配置链:
+     *   1) IMU 侧: SMPLRT_DIV = kImuSampleRateDiv (100Hz);
+     *              INT 引脚 active high / 推挽 / 50us 脉冲 / 任意读清除;
+     *              使能 DATA_RDY 中断
+     *   2) ESP32 侧: 创建二值信号量 + attachInterrupt(int_pin, ISR, RISING)
+     *
+     * 调用方典型流程: Init() -> EnableDataReadyInterrupt(kPinImuInt)
+     *                 然后用 WaitForDataReady() 阻塞等中断, 替代固定 vTaskDelay
+     *
+     * @param  int_pin  ESP32 端连接 IMU INT 的 GPIO 编号 (= cw::board::kPinImuInt)
+     * @return true = 配置成功; false = 信号量创建失败 (极少见)
+     *
+     * ⚠️ R5 风险: 如果 IMU pin 11 实际是 FSYNC (输入) 而不是 INT (输出),
+     *              ISR 永远不会被触发. WaitForDataReady() 会持续超时,
+     *              调用方应在超时时切到固定周期 vTaskDelay 兜底, 见 main.cpp.
+     */
+    bool EnableDataReadyInterrupt(uint8_t int_pin);
+
+    /**
+     * @brief  阻塞等待一帧 DRDY 中断到来.
+     *
+     * @param  timeout_ms  最长等待时间; 推荐 = cw::board::kImuIntWaitMs (15ms)
+     * @return true  = 在超时前收到中断 (= IMU 有新数据可读)
+     *         false = 中断未到 / 中断未启用 — 调用方应当启动兜底机制
+     *
+     * 必须先调过 EnableDataReadyInterrupt() 才有效, 否则总是返回 false.
+     */
+    bool WaitForDataReady(uint32_t timeout_ms);
+
+    /**
+     * @brief  查询当前是否处于中断驱动模式.
+     * @return true = EnableDataReadyInterrupt() 已成功调用; false = 仅轮询
+     */
+    bool IsInterruptModeActive() const;
 
 
 private:

@@ -46,7 +46,7 @@
 | **R2** | **USB-C CC1 / CC2 引脚悬空** (充电.png 上 CC1 / CC2 / SBU1 / SBU2 都标 X = NC) | USB-C → USB-C 线**不会供电** (PC 端检测不到设备), 只能用 USB-A → USB-C 线 | 首板用 USB-A → USB-C 线供电烧录; 后续改板加 5.1K 双下拉 |
 | **R3** | **LDO CE 引脚连接到 GND** (充电.png 上 LDO1 pin 3 CE → GND) | 大部分 LDO (ME6211 / SGM2036 / RT9080) 的 CE 是高电平有效, CE=GND 会让 LDO 输出 0V, 整板没电! | 上电前万用表测 LDO 实际输出; 若为 0V 则要么飞线把 CE 接 VIN, 要么换 CE 低有效的 LDO |
 | **R4** | **充电电流 600 mA 对 300 mAh 电池偏高 (~2C)** | 长期充电会降低电池循环寿命, 严重时鼓包 | 改 R5 = 4.7 kΩ → 250 mA 更安全; 或选更大容量电池 (800~1000 mAh) |
-| **R5** | **IMU pin 11 标 FSYNC 但接 INT 网络, pin 12 标 INT 但悬空** (IMU.png) | InvenSense 的 FSYNC 通常是输入 (帧同步), 不能反向输出中断; 可能是丝印误标或设计错误 | 焊好首板后, 用示波器看 FSYNC 引脚是否真的能输出中断脉冲; 不行就直接不用 IMU 中断, 软件改用纯轮询 |
+| **R5** | **IMU pin 11 标 FSYNC 但接 INT 网络, pin 12 标 INT 但悬空** (IMU.png) | InvenSense 的 FSYNC 通常是输入 (帧同步), 不能反向输出中断; 可能是丝印误标或设计错误 | **软件已采用 "中断为主 + 轮询兜底" 策略** (`Mpu6050IMU::EnableDataReadyInterrupt`); 首板上电后无需手动判断, 看串口日志: 若打印 `[imu] DRDY interrupt timeout ... fallback to polling`, 说明 R5 真触发, 软件自动退到 7ms 轮询模式, 业务无感; 想恢复中断节能, 飞线把 IMU pin 12 (真 INT) 接到 IO4, 同时切断 pin 11 (FSYNC) 现有走线 |
 | **R6** | **没有 VBAT 电量采样** | 软件读不到电池电压, 没法做"电量低告警 / 软关机" | 当前阶段暂不做电量管理; 后续改板加 R7'/R8' 100K + 找空闲 ADC IO (推荐 IO6 ~ IO15 任选) |
 
 ---
@@ -147,7 +147,7 @@ flowchart LR
 | **LED_IN** | 35 | **IO42** | OUT | LED1 (WS2812B) DIN, R1=10K 上拉 | `cw::board::kPinLed1Data` | **必须 NeoPixel/RMT 驱动** |
 | **I2C SCL** | 14 | **IO20** | OUT | U4 IMU pin 23 SCL | `cw::board::kPinI2cScl` | ⚠️ 无外部上拉, 见 §0.2 R1 |
 | **I2C SDA** | 24 | **IO47** | I/O | U4 IMU pin 24 SDA (从模组底部引出) | `cw::board::kPinI2cSda` | ⚠️ 无外部上拉 |
-| **IMU INT** | 4 | **IO4** | IN | U4 IMU pin 11 (网络名 INT, 但丝印为 FSYNC) | `cw::board::kPinImuInt` | ⚠️ 软件目前未启用, 见 §0.2 R5 |
+| **IMU INT** | 4 | **IO4** | IN | U4 IMU pin 11 (网络名 INT, 但丝印为 FSYNC) | `cw::board::kPinImuInt` | ✅ 软件已用作 DRDY 中断输入, R5 触发时自动回退轮询, 见 §0.2 R5 |
 | **CHRG (充电状态)** | 5 | **IO5** | IN | U3 充电 IC pin 1 (开漏输出) | `cw::board::kPinChargeStat` | 充电时拉低; 软件用 `INPUT_PULLUP` |
 
 ### 3.2 模组其它引脚 (原理图标 X = NC, 全部空闲, 板上未引出走线)
@@ -317,7 +317,7 @@ flowchart LR
 - [ ] **§0.2 R3 (LDO CE 极性)**: 上电前万用表测 LDO1 pin 3 实际电平 + pin 5 输出; 输出 ≠ 3.3V 立刻断电检查
 - [ ] **§0.2 R2 (USB-C CC)**: 准备 USB-A → USB-C 数据线, 不要用 USB-C → USB-C 线
 - [ ] **§0.2 R1 (I2C 上拉)**: 静态测 SDA / SCL 电压, 应接近 +3V3; 远小于 3V 就要飞 4.7K 上拉
-- [ ] **§0.2 R5 (IMU INT)**: 烧测试程序看 INT 引脚是否有中断脉冲, 没有就只用纯轮询 (软件已默认轮询)
+- [ ] **§0.2 R5 (IMU INT)**: 不用单独烧测试程序, 直接跑业务固件看串口; 若 5 秒内出现 `[imu] DRDY interrupt timeout ... fallback to polling` 即 R5 触发 (此时业务正常但 CPU 没节省)
 - [ ] **§0.2 R4 (充电流偏高)**: 用电流表串入 USB 测充电电流 ~600mA; 若电池温度 > 45°C 把 R5 换成 4.7kΩ → 250mA
 - [ ] U4 IMU 型号: 烧 I2C scanner 验证 0x68 + 烧 WHOAMI 测试程序读寄存器 0x75, 与 §4.4 表格对照
 

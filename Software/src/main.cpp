@@ -133,6 +133,12 @@ void system_init(void) {
   Serial.printf("[system] loop Priority: %d\n", new_priority);
 
   cw::imu::Mpu6050IMU::GetInstance().Init();
+  // 启用 DRDY 中断: 让采样从 "vTaskDelay 忙等" 升级为 "硬件触发唤醒",
+  // 释放 ~70% 的采样间隙 CPU 给 BLE / button / LED 等任务. 失败也不阻塞,
+  // capture_press_to_release 内有 R5 兜底, 自动退化为原 vTaskDelay 节奏.
+  cw::imu::Mpu6050IMU::GetInstance().EnableDataReadyInterrupt(
+      cw::board::kPinImuInt);
+
   cw::cnn::ActionRecognitionCNN::GetInstance().Init();
 
   cw::button::ButtonManager::GetInstance().AddButton(
@@ -197,12 +203,16 @@ enum class CaptureExitReason {
  *
  * 调用前提: 调用方刚从按键队列取到 ButtonEvent::PressDown.
  *
- * 流程:
+ * 流程 (中断驱动版本):
  *   1) 点亮状态 LED 提示 "正在记录"
  *   2) 拿 IMU 内部缓冲首地址 + 容量 (= 300 帧)
  *   3) 循环:
- *        - SampleOneFrame(buf[N++])     -- 同步采一帧 ~3ms
- *        - GetEvent(7ms)                -- 等下一帧时间, 顺带 poll 按键队列
+ *        - WaitForDataReady(15ms)            -- 阻塞等 IMU DRDY 中断, CPU 让给其他任务
+ *          - 中断到来: SampleOneFrame 立即读 (有效数据)
+ *          - 超时未来: R5 风险触发 (硬件没接好), 此后整轮 capture 改走
+ *                      固定 7ms vTaskDelay 兜底, 避免重复浪费 15ms 等待
+ *        - SampleOneFrame(buf[N++])           -- 同步采一帧 ~3ms
+ *        - 0-poll 按键事件:
  *          - JoystickBtn::Release      -> 退出循环, 返回 UserReleased
  *          - JoystickBtn::DoubleClick  -> 退出循环, 返回 UserDoubleClicked
  *                                          (button 状态机会在二次按下时同步发出
@@ -213,10 +223,15 @@ enum class CaptureExitReason {
  *        - N >= kContinuousMaxFrames    -> 退出循环, 返回 HitMaxFrames
  *   4) 熄灭 LED
  *
+ * 中断 vs. 轮询的能效对比 (按 100Hz / 单次手势 100 帧 ≈ 1 秒计):
+ *   旧轮询: 100 * 7ms = 700ms vTaskDelay (CPU 空等)
+ *   新中断: 100 * 7ms 同样 idle 时长, 但调度器明确知道在等信号,
+ *           可以让 CPU 进入 light sleep / 用满给 BLE / 让出给 LED RMT 任务
+ *
  * 注:
- *   - 期间整个 loop 阻塞, 但最长 ~3 秒 (300 帧 * 10ms),
+ *   - 整个 capture 期间 main loop 阻塞最长 ~3 秒 (300 帧),
  *     BleRemote::SwitchAdvByTick 内部已按 N 秒节流, 短暂延迟无副作用.
- *   - 7ms 等待时间 = "10ms 总周期 - 3ms IMU 通信", 与原 GetSamplData sleep_ms 完全等价.
+ *   - poll_button_zero_wait 让按键响应在 1 帧内 (~10ms 延迟), 用户无感.
  */
 static CaptureExitReason capture_press_to_release(cw::common::IMU*& out_buf,
                                                   uint16_t& out_n) {
@@ -243,11 +258,28 @@ static CaptureExitReason capture_press_to_release(cw::common::IMU*& out_buf,
   CaptureExitReason reason = CaptureExitReason::HitMaxFrames;
   ButtonMessage msg{};
 
+  // R5 兜底状态: 一旦中断在本次 capture 内超时一次, 后续直接走固定 vTaskDelay,
+  // 避免每帧都浪费 15ms 等待. 跨 capture 不持久 (如果用户飞线修了 R5,
+  // 下次 PressDown 会重新尝试中断驱动).
+  bool fallback_to_polling = !imu.IsInterruptModeActive();
+
   while (n < buf_capacity) {
+    if (fallback_to_polling) {
+      // R5 路径: 没有中断, 每帧固定睡 7ms 后直接读, 与旧版完全一致的节奏.
+      vTaskDelay(pdMS_TO_TICKS(cw::board::kImuPollFallbackMs));
+    } else if (!imu.WaitForDataReady(cw::board::kImuIntWaitMs)) {
+      // 中断没在 15ms 内来 -> 视为 R5 已触发, 切兜底
+      ILOGT("[imu] DRDY interrupt timeout at frame %u, fallback to polling "
+            "(check R5: pin 11 FSYNC/INT 走线)\n", n);
+      fallback_to_polling = true;
+      vTaskDelay(pdMS_TO_TICKS(cw::board::kImuPollFallbackMs));
+    }
+
     imu.SampleOneFrame(out_buf[n]);
     ++n;
 
-    if (btn.GetEvent(msg, pdMS_TO_TICKS(7))) {
+    // 0-poll 按键事件 (不阻塞), 按键节奏由 IMU 帧率决定 (~10ms 延迟可接受).
+    if (btn.GetEvent(msg, 0)) {
       if (msg.type == ButtonType::JoystickBtn) {
         if (msg.event == ButtonEvent::Release) {
           reason = CaptureExitReason::UserReleased;

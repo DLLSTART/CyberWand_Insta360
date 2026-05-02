@@ -4,10 +4,31 @@
 #include "base.h"
 #include "common.h"
 #include "esp_timer.h"
-#include "board_config.h"   // kPinI2cSda / kPinI2cScl / kI2cClockHz
+#include "board_config.h"   // kPinI2cSda / kPinI2cScl / kI2cClockHz / kImuSampleRateDiv
 
 namespace cw { 
 namespace imu {
+
+// =============================================================================
+// IMU DRDY 中断驱动: 模块内私有状态
+// -----------------------------------------------------------------------------
+// 信号量在 ISR 里 give, 在业务任务里 take. 文件局部的 static + 单例的 IMU
+// 保证全局只有一个 ISR 一个 taker, 不会出现多消费者竞争.
+// IRAM_ATTR 是 ESP32 必须的属性: 中断处理代码必须放在 IRAM, 否则 cache miss
+// 时 (尤其 N16R8 启用 PSRAM 后频繁 cache 操作) 会让 ISR 严重抖动甚至死锁.
+// =============================================================================
+static SemaphoreHandle_t s_drdy_sem      = nullptr;
+static volatile bool     s_int_mode_on   = false;
+
+static void IRAM_ATTR drdy_isr(void) {
+    BaseType_t hpw = pdFALSE;
+    if (s_drdy_sem != nullptr) {
+        xSemaphoreGiveFromISR(s_drdy_sem, &hpw);
+    }
+    if (hpw == pdTRUE) {
+        portYIELD_FROM_ISR();
+    }
+}
 Mpu6050IMU::Mpu6050IMU() : BaseIMU() {
     SetSamplePeriod(IMU_SAMPLING_TIME_MS);
     SetSampleCount(IMU_SEQUENCE_LENGTH_MAX);
@@ -133,6 +154,58 @@ void Mpu6050IMU::SampleOneFrame(common::IMU& out) {
 common::IMU* Mpu6050IMU::GetContinuousBuffer(uint16_t& out_capacity) {
     out_capacity = kIMUMaxCount;
     return imus_;
+}
+
+// -----------------------------------------------------------------------------
+// EnableDataReadyInterrupt: 一次性配置 "IMU 端寄存器 + ESP32 端中断挂载",
+//   让业务侧的 SampleOneFrame 可以由硬件触发驱动, 而不是固定 vTaskDelay 轮询.
+// 时序:
+//   IMU 内部 -> 100Hz 数据就绪 -> INT 引脚 50us 高脉冲 -> ESP32 GPIO RISING
+//   -> drdy_isr -> xSemaphoreGiveFromISR -> 业务任务 WaitForDataReady 返回
+// -----------------------------------------------------------------------------
+bool Mpu6050IMU::EnableDataReadyInterrupt(uint8_t int_pin) {
+    // 1) IMU 寄存器配置
+    mpu.setRate(cw::board::kImuSampleRateDiv);  // SMPLRT_DIV = 9 -> 100Hz
+    mpu.setInterruptMode(false);                // INT_LEVEL = 0 -> active high
+    mpu.setInterruptDrive(false);               // INT_OPEN  = 0 -> push-pull
+    mpu.setInterruptLatch(false);               // LATCH_INT_EN = 0 -> 50us pulse
+    mpu.setInterruptLatchClear(true);           // INT_RD_CLEAR = 1 -> 任意状态读清除
+    mpu.setIntDataReadyEnabled(true);           // DATA_RDY_EN = 1
+
+    // 2) 创建二值信号量 (lazy init, 重复调用安全)
+    if (s_drdy_sem == nullptr) {
+        s_drdy_sem = xSemaphoreCreateBinary();
+        if (s_drdy_sem == nullptr) {
+            ILOGN("[imu] DRDY semaphore create failed");
+            return false;
+        }
+    }
+
+    // 3) 挂 ESP32 GPIO 中断
+    //    INPUT (不内部上拉): IMU 是 push-pull 强驱动, 内部上拉只会拖累边沿斜率.
+    pinMode(int_pin, INPUT);
+    attachInterrupt(int_pin, drdy_isr, RISING);
+
+    s_int_mode_on = true;
+    ILOGN("[imu] DRDY interrupt enabled");
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+// WaitForDataReady: 阻塞等待一次 DRDY 中断. 该函数把 CPU 完全让出,
+//   FreeRTOS 调度器在等待期间会运行 BLE / button / LED 等其他任务.
+//   - 中断未启用 -> 直接 false (调用方自然走轮询路径)
+//   - 中断启用但 timeout 内没来 -> false (R5 风险触发, 调用方应该日志告警)
+// -----------------------------------------------------------------------------
+bool Mpu6050IMU::WaitForDataReady(uint32_t timeout_ms) {
+    if (!s_int_mode_on || s_drdy_sem == nullptr) {
+        return false;
+    }
+    return xSemaphoreTake(s_drdy_sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+bool Mpu6050IMU::IsInterruptModeActive() const {
+    return s_int_mode_on;
 }
 
 const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count ,uint16_t timeout_ms) {
