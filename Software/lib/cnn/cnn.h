@@ -1,6 +1,12 @@
 #pragma once
 #include "nnom.h"
+// weights.h 由 CNNTrainRaw.py 训练 pipeline 自动生成, 里面把 string literal
+// 直接赋给 nnom 的 char* name 字段, GCC -Wwrite-strings 会报 14 条警告.
+// 不能手改 weights.h (重新训练会被覆盖), 在包含位置局部抑制即可.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wwrite-strings"
 #include "weights.h"
+#pragma GCC diagnostic pop
 #include "common.h"
 #include "base.h"
 

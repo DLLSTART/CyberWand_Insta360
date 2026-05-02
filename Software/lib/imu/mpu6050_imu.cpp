@@ -1,4 +1,3 @@
-#pragma once
 #include "mpu6050_imu.h"
 #include <stdint.h>
 #include "base.h"
@@ -236,7 +235,12 @@ const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count ,uint16_t ti
         imus_[sampled_index].gyro.pitch = gy / IMU_GYRO_TRANS_RADIAN_CONSTANT;
         imus_[sampled_index].gyro.yaw = gz / IMU_GYRO_TRANS_RADIAN_CONSTANT;
 
-        #ifndef defined(CY_DEBUG)
+        // 修正笔误: 原 "#ifndef defined(CY_DEBUG)" 是错的 - #ifndef 后只能跟
+        // 标识符, defined() 只能用在 #if. 编译器把 "defined" 当成未定义的宏 ->
+        // 整段 #ifndef 永远为真, 导致 release 模式每帧也在打 6 次 Serial.printf,
+        // 直接抵消 IMU 中断驱动节能 (100Hz x 6 prints/帧 ~= 60ms/秒 阻塞串口).
+        // 现在改为 #ifdef CY_DEBUG: release 不打, 想看数据时去 common.h 取消注释.
+        #ifdef CY_DEBUG
         ILOGT("a/g:\t");
         ILOGT("%f",imus_[sampled_index].acc.x); ILOGT("\t");
         ILOGT("%f",imus_[sampled_index].acc.y); ILOGT("\t");
