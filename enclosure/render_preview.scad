@@ -9,23 +9,13 @@ RENDER_TOP_LEVEL = false;   // 覆盖 elder_wand.scad 末尾自动渲染（OpenS
 
 VIEW = "HORIZONTAL";        // HORIZONTAL / ISO / SECTION / TIP_CLOSEUP / POMMEL_CLOSEUP / BAND_CLOSEUP / EXPLODED
 
-// === PCB / 电池占位 ===
-module payload_block() {
-    color("forestgreen", 0.85)
-        translate([0, 0, cavity_z_start + 8 + pcb_t/2])
-            cube([pcb_l, pcb_w, pcb_t], center = true);
-    color("orange", 0.9)
-        translate([0, 0, cavity_z_start + 18 + batt_t/2])
-            cube([batt_l, batt_w, batt_t], center = true);
-}
-
-// === 剖切：去掉 +Y 半边露出电子腔 ===
+// === 剖切：去掉 +Y 半边露出电子腔，并叠加 v5 真实 PCB+元件占位 ===
 module section_cut() {
     difference() {
         color("saddlebrown") wand_full();
         translate([-100, 0, -10]) cube([200, 120, total_length + 20]);
     }
-    payload_block();
+    preview_payload();   // 改用 elder_wand.scad 中的 v5 真实占位
 }
 
 // === 视图分发 ===
