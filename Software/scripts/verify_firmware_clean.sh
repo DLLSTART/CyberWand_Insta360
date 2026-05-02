@@ -24,7 +24,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUILD_DIR="${PROJ_DIR}/.pio/build/esp32doit-devkit-v1"
+# PIO build dir 由 platformio.ini 中 [env:NAME] 决定, 当前 env 名 = "cyberwand"
+# (硬件 board 已切换到 esp32-s3-devkitc-1, 但 env 名保持 "cyberwand").
+BUILD_DIR="${PROJ_DIR}/.pio/build/cyberwand"
 ELF="${BUILD_DIR}/firmware.elf"
 
 fail=0
@@ -63,10 +65,17 @@ fi
 # 2) firmware.elf 中不可有任何测试框架/桩符号
 # -----------------------------------------------------------------------------
 echo "[2/4] ELF symbol pollution check"
-NM="$(find "${HOME}/.platformio/packages/toolchain-xtensa-esp32/bin" \
-       -name "xtensa-esp32-elf-nm" 2>/dev/null | head -1)"
+# ESP32-S3 工具链 (xtensa-esp32s3-elf-nm) 优先, 老 ESP32 (xtensa-esp32-elf-nm) 兜底,
+# 都没有则用通用 nm (足以解析 ELF 符号表).
+NM=""
+for cand in \
+    "${HOME}/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-nm" \
+    "${HOME}/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-nm" \
+    "$(command -v nm)"; do
+    if [[ -x "${cand}" ]]; then NM="${cand}"; break; fi
+done
 if [[ -z "${NM}" ]]; then
-    warn "xtensa-esp32-elf-nm not found, skip ELF symbol check"
+    warn "no nm tool found, skip ELF symbol check"
 else
     bad_syms=$("${NM}" "${ELF}" 2>/dev/null \
         | grep -E "mini_test|MT_TEST|cw_test|HardwareSerialMock|mt_reg_" || true)

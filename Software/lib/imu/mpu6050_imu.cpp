@@ -4,6 +4,7 @@
 #include "base.h"
 #include "common.h"
 #include "esp_timer.h"
+#include "board_config.h"   // kPinI2cSda / kPinI2cScl / kI2cClockHz
 
 namespace cw { 
 namespace imu {
@@ -13,10 +14,12 @@ Mpu6050IMU::Mpu6050IMU() : BaseIMU() {
 }
 void Mpu6050IMU::Init() {
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-    Wire.begin(); 
-    Wire.setClock(400000);
+    // ESP32-S3 默认 Wire 引脚不一定是 IO8/IO9, 必须显式指定原理图里实际接 IMU 的引脚.
+    // 否则 begin() 用的是默认 IO, scanner 可能完全看不到 0x68.
+    Wire.begin(cw::board::kPinI2cSda, cw::board::kPinI2cScl);
+    Wire.setClock(cw::board::kI2cClockHz);
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-    Fastwire::setup(400, true);
+    Fastwire::setup(static_cast<uint16_t>(cw::board::kI2cClockHz / 1000), true);
     #endif
 
     mpu.initialize();

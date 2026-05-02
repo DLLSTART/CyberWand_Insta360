@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "board_config.h"   // 板级 GPIO / 颜色常量, 替代旧硬编码引脚号
 #include "mpu6050_imu.h"
 #include "cnn.h"
 #include "imu_resampler.h"
@@ -110,10 +111,12 @@ static void dispatch_gesture_to_ble(cw::cnn::ActionType action) {
  *   1) 串口 115200 用于日志
  *   2) 提升 loop 任务优先级至 3, 让按键 / IMU 处理更及时
  *      (默认是 1, 可能被一些后台任务抢占影响实时性)
- *   3) 初始化 IMU 与 CNN 推理引擎
- *   4) 注册按键 (GPIO26) 并启动按键管理器
- *   5) 注册状态 LED (GPIO13) 并启动 LED 管理器
+ *   3) 初始化 IMU 与 CNN 推理引擎 (I2C 引脚由 board_config.h 提供)
+ *   4) 注册按键 (board_config.h::kPinKey1) 并启动按键管理器
+ *   5) 注册状态 LED (board_config.h::kPinLed1Data, WS2812B) 并启动 LED 管理器
  *   6) 初始化 BLE 协议栈 (启动可发现广播)
+ *
+ * 所有 GPIO 字面值都不在本文件出现, 板子换了只改 board_config.h 即可.
  */
 void system_init(void) {
   Serial.begin(115200);
@@ -132,10 +135,13 @@ void system_init(void) {
   cw::imu::Mpu6050IMU::GetInstance().Init();
   cw::cnn::ActionRecognitionCNN::GetInstance().Init();
 
-  cw::button::ButtonManager::GetInstance().AddButton(26, cw::button::ButtonType::JoystickBtn);
+  cw::button::ButtonManager::GetInstance().AddButton(
+      cw::board::kPinKey1, cw::button::ButtonType::JoystickBtn);
   cw::button::ButtonManager::GetInstance().Begin();
 
-  cw::led::LedManager::GetInstance().AddLed(13, cw::led::LedType::Status, HIGH);
+  // WS2812B 单线智能 LED, 不需要 active_level (旧 PWM 接口已被移除).
+  cw::led::LedManager::GetInstance().AddLed(
+      cw::board::kPinLed1Data, cw::board::kLed1Count, cw::led::LedType::Status);
   cw::led::LedManager::GetInstance().Begin();
 
   cw::ble::BleRemote::GetInstance().Init();
@@ -160,15 +166,19 @@ void setup() {
 void double_click_handler(void) {
   if (kWorkMode == SystemWorkMode::Application) {
     kWorkMode = SystemWorkMode::Acquisition;
-    cw::led::LedManager::GetInstance().SetMode(cw::led::LedType::Status,
-                                               cw::led::LedMode::BlinkFast, 2000,
-                                               cw::led::LedMode::Off);
+    // 切到 Acquisition: 蓝色快闪 2s 提示进入数据采集模式
+    cw::led::LedManager::GetInstance().SetMode(
+        cw::led::LedType::Status, cw::led::LedMode::BlinkFast,
+        cw::board::kLedColorMode, 2000,
+        cw::led::LedMode::Off);
     ILOGN("[main] mode -> Acquisition");
   } else {
     kWorkMode = SystemWorkMode::Application;
-    cw::led::LedManager::GetInstance().SetMode(cw::led::LedType::Status,
-                                               cw::led::LedMode::On, 3000,
-                                               cw::led::LedMode::Off);
+    // 切回 Application: 绿色长亮 3s 提示就绪
+    cw::led::LedManager::GetInstance().SetMode(
+        cw::led::LedType::Status, cw::led::LedMode::On,
+        cw::board::kLedColorReady, 3000,
+        cw::led::LedMode::Off);
     ILOGN("[main] mode -> Application");
   }
 }
@@ -224,8 +234,9 @@ static CaptureExitReason capture_press_to_release(cw::common::IMU*& out_buf,
     buf_capacity = cw::imu::kContinuousMaxFrames;
   }
 
-  led.SetMode(cw::led::LedType::Status,
-              cw::led::LedMode::On, 0,
+  // 录制中: 红色常亮, 持续到 SetMode(Off) 显式熄灭 (duration=0 -> 永久).
+  led.SetMode(cw::led::LedType::Status, cw::led::LedMode::On,
+              cw::board::kLedColorRecording, 0,
               cw::led::LedMode::On);
 
   uint16_t n = 0;
@@ -252,8 +263,8 @@ static CaptureExitReason capture_press_to_release(cw::common::IMU*& out_buf,
     }
   }
 
-  led.SetMode(cw::led::LedType::Status,
-              cw::led::LedMode::Off, 0,
+  // 松开 / 达上限: 立即灭灯 (颜色不重要, 沿用旧签名).
+  led.SetMode(cw::led::LedType::Status, cw::led::LedMode::Off, 0,
               cw::led::LedMode::Off);
 
   out_n = n;
