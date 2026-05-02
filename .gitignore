@@ -26,6 +26,9 @@ build/
 CMakeCache.txt
 CMakeFiles/
 
+# 本地单元测试构建产物 (Software/test/build/) 和缓存
+Software/test/build/
+
 # IDE
 .vscode/
 .idea/
@@ -40,8 +43,57 @@ Thumbs.db
 # 项目特定
 *.7z
 
+# 应用层协议描述符 (本地版本, 不入库)
+Software/config/protocol.json
+# 由 protocol.json 自动生成的 C++ 头, 不入库
+Software/include/protocol_config.h
+
 # 硬件设计文档（本地生成）
 HardWare/docs/
 
 # 3D 外壳渲染/STL 生成产物
-enclosure/output/
+#   enclosure/output/   渲染 PNG: 默认全部 ignore, ! 显式放行 v513_*.png
+#   enclosure/stl/      最终 STL: 默认全部 ignore, ! 显式放行 cyberwand_v51_*.stl
+enclosure/output/*
+# === v5.1.3 当前版本 完整渲染图集 (实物配色 胡桃木 + 黄铜) ===
+#   v5.1.3 设计: 平滑握持 + 凹陷式按键 (彻底重做 v5.1.2 凸台/防滑纹)
+# 整体外观
+!enclosure/output/v513_outer_full.png
+!enclosure/output/v513_horizontal.png
+# 5 段最佳打印朝向 (PRINT_AND_ASSEMBLY.md 引用)
+!enclosure/output/v513_print_orient_A.png
+!enclosure/output/v513_print_orient_B.png
+!enclosure/output/v513_print_orient_C.png
+!enclosure/output/v513_print_orient_D.png
+!enclosure/output/v513_print_orient_E.png
+# 装配爆炸图 (PRINT_AND_ASSEMBLY.md 引用)
+!enclosure/output/v513_exploded.png
+# 近视图 (手柄段 + pommel)
+!enclosure/output/v513_handle_close.png
+!enclosure/output/v513_pommel.png
+# === 历史版本归档 (v4/v5/v5.1/v5.1.2) 仅本地保留, 不入库 ===
+#   v5.1.2 整套图已归档到 archive/v512/ (含人体工学优化前的版本)
+#   归档目录已被上面的 enclosure/output/* 规则覆盖, 此处显式重申避免误反向
+enclosure/output/archive/
+
+# 最终 STL 目录 (v5.1.3): 默认全部 ignore, 仅显式放行 cyberwand_v51_*.stl
+#   入库 5 段: A_handle / B_decor / C_shaft / D_pommel / E_button
+#   旧版 wand_*.stl (v5.1 之前) 已删除
+enclosure/stl/*
+!enclosure/stl/cyberwand_v51_*.stl
+
+# 3D 外壳临时调试用渲染脚本 (一次性 v5/v51 验证, 非工程核心)
+#   工程入口只保留: elder_wand.scad (主源) + render_preview.scad (基础预览)
+#   v5.1.3 实物配色渲染由 enclosure/scripts/render_painted_wand.py 生成,
+#   该脚本被 enclosure/scripts/ 规则忽略, 不入库 (按用户要求)
+enclosure/render_v5*.scad
+enclosure/render_v51_*.scad
+enclosure/render_v512_*.scad
+enclosure/render_v513_*.scad
+
+# 3D 外壳一次性数据提取工具脚本 (从 DXF 抽 PCB 几何, 结果已固化进 elder_wand.scad)
+enclosure/scripts/
+
+# Windows NTFS 备用数据流 (Zone.Identifier / dlpfac 等), 全部忽略
+*:Zone.Identifier
+*:dlpfac

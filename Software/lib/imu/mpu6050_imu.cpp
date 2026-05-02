@@ -102,6 +102,35 @@ const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count) {
     return imus_;
 }
 
+// -----------------------------------------------------------------------------
+// SampleOneFrame: 同步采一帧 IMU (~3ms), 用于 "按下到松开" 连续采样路径.
+//   - 不操作 status_, 不持锁, 调用方自己保证不与 GetSamplData 并发
+//   - 单位换算与 GetSamplData 完全一致 (acc 除以 8192.0, gyro 除以 4213.359738)
+// -----------------------------------------------------------------------------
+void Mpu6050IMU::SampleOneFrame(common::IMU& out) {
+    int16_t ax, ay, az;
+    int16_t gx, gy, gz;
+    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+    out.acc.x = ax / IMU_ACC_TRANS_CONSTANT;
+    out.acc.y = ay / IMU_ACC_TRANS_CONSTANT;
+    out.acc.z = az / IMU_ACC_TRANS_CONSTANT;
+
+    out.gyro.roll  = gx / IMU_GYRO_TRANS_RADIAN_CONSTANT;
+    out.gyro.pitch = gy / IMU_GYRO_TRANS_RADIAN_CONSTANT;
+    out.gyro.yaw   = gz / IMU_GYRO_TRANS_RADIAN_CONSTANT;
+}
+
+// -----------------------------------------------------------------------------
+// GetContinuousBuffer: 暴露 BaseIMU 内部 imus_ 缓冲首地址与容量.
+//   - 调用方在 PressDown 收到时获取 buf, 然后循环 SampleOneFrame(buf[i++])
+//   - 容量上限由 kIMUMaxCount = 300 决定, 与 kContinuousMaxFrames 对齐
+// -----------------------------------------------------------------------------
+common::IMU* Mpu6050IMU::GetContinuousBuffer(uint16_t& out_capacity) {
+    out_capacity = kIMUMaxCount;
+    return imus_;
+}
+
 const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count ,uint16_t timeout_ms) {
     const uint8_t loop_interval = 10;
     uint16_t sampled_index = 0;

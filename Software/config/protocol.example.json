@@ -1,0 +1,75 @@
+{
+    "_doc": [
+        "Cyber Wand BLE remote-control protocol descriptor (PUBLIC EXAMPLE / PLACEHOLDER).",
+        "All values here are FAKE. They only let the project compile cleanly.",
+        "To run against a real peer device, copy this file to 'protocol.json'",
+        "(gitignored) and fill in the real values. The build script auto-generates",
+        "'Software/include/protocol_config.h' before each build."
+    ],
+
+    "ble": {
+        "_doc": "GATT server parameters announced by the wand.",
+        "gap_name":            "CyberWand",
+        "service_uuid16":      "0xFFE0",
+        "write_char_uuid16":   "0xFFE1",
+        "notify_char_uuid16":  "0xFFE2",
+        "preferred_mtu":        240
+    },
+
+    "frame": {
+        "_doc": [
+            "Application framing on top of GATT.",
+            "Layout: [HEAD 3B][CMD 1B][END|SN 1B][SIZE 1B][DATA SIZE B]",
+            "head_length already includes 3 B head + 1 B cmd + 1 B end|sn + 1 B size = 6"
+        ],
+        "head_outbound":   ["0xAA", "0xBB", "0xCC"],
+        "head_inbound":    ["0xCC", "0xBB", "0xAA"],
+        "head_length":      6,
+        "end_bit":         "0x80",
+        "max_data_len":     234,
+        "peer_token_payload_length": 6,
+        "commands": {
+            "_doc": "Command bytes used by both directions (rx_*/tx_*).",
+            "rx_peer_token":      "0x01",
+            "rx_shutdown":        "0x02",
+            "rx_disconnect":      "0x03",
+            "tx_button":          "0x10",
+            "tx_shutdown":        "0x20",
+            "tx_set_mode":        "0x21",
+            "tx_capture_photo":   "0x22",
+            "tx_record_start":    "0x23",
+            "tx_record_stop":     "0x24",
+            "tx_mark":            "0x25"
+        }
+    },
+
+    "wakeup": {
+        "_doc": [
+            "Vendor-specific manufacturer advertisement, used in 'paired' state.",
+            "manufacturer-data layout: [prefix N B][token token_length B][suffix M B]",
+            "prefix already includes the leading CompanyID (2 B little-endian).",
+            "",
+            "While paired and disconnected, the wand alternates between this wakeup",
+            "adv and a normal discoverable adv every rotate_period_ms, so that:",
+            "  - the originally paired peer can be hardware-woken via the embedded SN,",
+            "  - any other peer can still discover the wand by GAP name in the",
+            "    normal-adv slice and pair with it."
+        ],
+        "rotate_period_ms": 5000,
+        "manufacturer_data": {
+            "prefix": [
+                "0xFF", "0xFF",
+                "0x10", "0x20", "0x30", "0x40"
+            ],
+            "token_length": 6,
+            "suffix": [
+                "0x50", "0x60"
+            ]
+        }
+    },
+
+    "modes": {
+        "_doc": "Sub-mode IDs cycled through on each tx_set_mode command.",
+        "switch_sequence": [0, 1]
+    }
+}
