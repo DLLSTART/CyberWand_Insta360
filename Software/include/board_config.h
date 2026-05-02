@@ -22,38 +22,47 @@ namespace cw {
 namespace board {
 
 // ===========================================================================
-// 1. GPIO 引脚映射
+// 1. GPIO 引脚映射 (与原理图 P1 / MCU.png 严格一致)
 // ---------------------------------------------------------------------------
-// 信号网络名取自原理图; 数值是基于原理图最佳判断 + ESP32-S3 工程惯例.
-// 实物焊好首板后, 对照原理图核对一遍, 不准时**只改这里**就够了.
+// 引脚号通过仔细阅读 enclosure/MCU.png + IMU.png + 充电.png 的网络标号确定:
+//   左侧 pin 3..14   (EN / IO4 / IO5 / ... / IO20)
+//   右侧 pin 27..38  (IO0 / IO35..42 / RXD0 / TXD0 / IO2)
+//   底部 pin 15..26  (大量 NC + IO47 引出 SDA)
+// 实物焊好首板后, 用万用表对照原理图任意一条 IO 网络回测, 不准时**只改这里**.
 // ===========================================================================
 
 // --- 主按键 (SW1) -------------------------------------------------------
-//   原理图: SW1 一端接 GND, 另一端 KEY_1 网络经 R2=10K 上拉到 +3V3
-//   软件:   pinMode(INPUT_PULLUP) + 按下读到 LOW
-//   选择理由: IO4 是 ESP32-S3 安全引脚 (非 strapping, 非 PSRAM, 非 USB),
-//            外部 10K 上拉够强, 内部弱上拉作为冗余
-constexpr uint8_t kPinKey1            = 4;
+//   原理图 (MCU.png): SW1 一端接 GND, 另一端 KEY_1 网络
+//                    经 R2=10K 上拉到 +3V3, 接到模组 pin 38 = IO2
+//   软件:   pinMode(INPUT_PULLUP) + 按下读到 LOW (内部弱上拉做冗余)
+constexpr uint8_t kPinKey1            = 2;
 
 // --- 主指示灯 (LED1, WS2812B) ------------------------------------------
-//   原理图: LED1 LED_IN ← MCU; LED_OUT → H1 跳线 (预留可级联多颗)
+//   原理图 (MCU.png): LED1 DIN <- MCU pin 35 = IO42 (LED_IN 网络)
+//                    LED1 DOUT -> H1 跳线 (3 pin: +3V3 / LED_OUT / GND, 预留级联)
 //   驱动:   必须用 RMT / Adafruit NeoPixel, 不能 digitalWrite
-//   选择理由: IO48 在很多 ESP32-S3 开发板上就是板载 RGB LED 引脚,
-//            驱动能力强 (40mA), 时序完整性好, 不占 strapping
-constexpr uint8_t kPinLed1Data        = 48;
+constexpr uint8_t kPinLed1Data        = 42;
 constexpr uint16_t kLed1Count         = 1;    // 当前布板 1 颗主灯, 后续如级联多颗就改这个
 
 // --- IMU (U4, I2C) ------------------------------------------------------
-//   原理图: U4 SDA/SCL 接 MCU, INT 接 MCU 中断脚
-//   注:     I2C 总线已在 IMU 端就近上拉到 +3V3
-constexpr uint8_t kPinI2cSda          = 8;
-constexpr uint8_t kPinI2cScl          = 9;
-constexpr uint8_t kPinImuInt          = 10;   // 软件目前未使用, 预留给 DRDY 中断
+//   原理图 (MCU.png + IMU.png):
+//     SDA -> MCU pin 24 = IO47 (从模组底部引出)
+//     SCL -> MCU pin 14 = IO20
+//     INT -> MCU pin 4  = IO4 (注: IMU 端 pin 11 标 "FSYNC" 但接到 INT 网络,
+//                              pin 12 标 "INT" 但悬空 - 可能是丝印误标,
+//                              实物以 PCB 走线为准, 本字段必须对应实际中断输出)
+//   ⚠️ 风险: 原理图上 SDA/SCL 没看到外部上拉电阻, 仅靠内部弱上拉.
+//             首板若 I2C scanner 看不到 0x68, 优先飞 4.7K 上拉到 +3V3.
+constexpr uint8_t kPinI2cSda          = 47;
+constexpr uint8_t kPinI2cScl          = 20;
+constexpr uint8_t kPinImuInt          = 4;   // 软件目前未使用, 预留给 DRDY 中断
 
 // --- 充电状态 (CHRG) ----------------------------------------------------
-//   原理图: 充电芯片 CHRG 开漏输出, 充电中拉低, 充满 / 未插 USB 高阻
-//   软件:   pinMode(INPUT_PULLUP); LOW 表示充电中
-constexpr uint8_t kPinChargeStat      = 11;
+//   原理图 (充电.png + MCU.png): 充电 IC U3 pin 1 (CHRG 开漏输出)
+//     -> R3=10K + LED2 (充电指示) -> +5V
+//     -> 同时回到 MCU pin 5 = IO5
+//   软件: pinMode(INPUT_PULLUP); LOW 表示充电中, 高阻表示充满 / 未插 USB
+constexpr uint8_t kPinChargeStat      = 5;
 
 // --- I2C 总线频率 -------------------------------------------------------
 constexpr uint32_t kI2cClockHz        = 400000;   // 400 kHz Fast Mode, IMU datasheet 上限
