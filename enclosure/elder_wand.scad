@@ -66,13 +66,18 @@ spiral_z_top     = 330 + Z_SHIFT;     // 338
 
 // === 直径参数 (保持 v4) ===
 pommel_dia_bot   = 18;
-pommel_dia_top   = 22;
+pommel_dia_top   = 24;     // v5.1.6: 22→24, 让顶面容纳 M24 空心螺纹 (Φ20 通孔
+                           //   要让偏置 USB 方孔 9×4 @ X=-4.82 穿过, 实测最远点 9.53mm)
 handle_dia_bot   = 34;
 handle_dia_top   = 32;
 ferrule_dia      = 33;
 band_dia         = 24;
 knot_dia_max     = 28;
 collar_dia       = 16;
+// v5.1.4: 上铜箍 (top ferrule) — 把原 collar 4mm 直筒改为鼓起的金属环,
+// 与下方 ferrule (Φ33 鼓起) 对称, 视觉上"金属箍把木质杖身固定到雕花结",
+// 彻底消除 v5.1.3 中 collar 直筒 → spiral 杖身之间的"光圆柱接缝"违和感.
+top_ferrule_dia  = 19;
 spiral_root_dia  = 16;
 spiral_tip_dia   =  4;
 tip_dia          =  1.2;
@@ -121,15 +126,35 @@ spiral_vines     = 1;        // 1 道藤蔓（单股自然螺旋）
 vine_height      = 2.0;      // 藤蔓凸出于核心的高度（mm，加粗补偿单股）
 vine_width_k     = 1.6;      // 藤蔓 2D 椭圆切向拉伸系数（让它像缠绕的"枝"而非"球"）
 
-// === 段间装配 ===
-joint_dia        = 8;        // Φ8 圆柱榫（v4 比 v3 更细，更精致）
-joint_len        = 7;
+// === 段间装配 (v5.1.5: 改为 M10 公制螺纹, 打印即连接) =======================
+//   设计动机:
+//     v5.1.4 之前: Φ8 圆柱榫 + 上下 "铜环" 视觉装饰. 但铜环只是渲染色, 物理上
+//                  整段是单一 PLA, 圆柱榫只能靠胶水粘合才锁死, 不算"机械连接".
+//     v5.1.5    : 把圆柱榫升级为 M10×1.5 螺纹 (公段顶部凸 5mm 外螺纹, 母段
+//                  底部凹 5.2mm 内螺纹). 打印后直接对准、顺时针拧紧 → 螺纹
+//                  咬合自锁, 完全不需胶水. 可拆卸维护内部 PCB.
+//
+//   规格选择 (M10×1.5):
+//     直径 10mm — 在 B-C 接缝处 collar_dia=16 主体内, 留 (16-10)/2=3mm 壁厚, 安全
+//     节距 1.5mm — 粗牙易拧、对 FDM 打印精度宽容 (较细的 M10×1 易堵层粘连)
+//     长度 5mm   — ≈3.3 圈, 抗拉力 PLA 极限 >3000 N ≈ 300 kg, 足够魔杖挥动场景
+//     单边 0.30mm 公差 — 配合 0.2mm 层高 / 0.4mm 喷嘴的 FDM 打印
+joint_dia        = 10;       // M10 公制螺纹
+joint_pitch      = 1.5;      // M10×1.5 粗牙节距
+joint_len        = 5;        // 螺纹啮合长度 5 mm
 
-// === v5.1.1 工艺特征 ===
-//   pommel ↔ handle 嵌套榫 (粘合时自动对中, 接缝隐藏)
-pd_tenon_dia     = 21;       // 公榫直径 (= pommel_dia_top - 1)
-pd_tenon_clear   = 0.2;      // 母槽 - 公榫单边间隙
-pd_tenon_h       = 1.0;      // 嵌套高度 (公凸 1.0 mm, 母凹 1.1 mm)
+// === D-A 接缝: M24×1 空心螺纹 (v5.1.6: 替代旧 pd_tenon 嵌套榫 + 胶水) =======
+//   设计要点:
+//     1) 中央 Φ20 通孔 -- 让偏置的 USB-C 接口体 (9×4mm @ X=-4.82) 穿过 pommel
+//        实测 USB 方孔 4 角离杖中心最远 9.53mm < Φ20 通孔半径 10mm, 完全包容
+//     2) 啮合长度 4mm = 节距 1mm × 4 整圈, 拧到底时 A 段相对 D 旋转 1440° = 0°
+//        起始角度 = 终止角度, 用户对齐 SW1 朝向 → 套入 → 顺拧 4 圈到底, 不会错位
+//     3) M24×1 细牙在 pommel 顶径 Φ24 内, 凸柱壁厚 (22.8-20)/2 = 1.4mm 安全
+//        齿深 0.6mm vs 0.4mm 喷嘴 = 1.5 倍喷嘴宽度, FDM 可清晰打印
+da_thread_d      = 24;       // M24 公制螺纹大径
+da_thread_p      = 1;        // 节距 1mm (细牙)
+da_thread_h      = 4;        // 啮合长度 = 4 整圈, 起止同相位
+da_thread_id     = 20;       // 中央通孔 Φ20 (容纳偏置 USB 9×4, 离心最远 9.53mm)
 //   PCB 卡槽顶端 45° 引导斜面参数
 pcb_slot_chamfer_h = 1.0;    // 入口倒角高度 (顶端 1mm 渐扩)
 pcb_slot_chamfer_w = 1.0;    // 倒角四周扩张量
@@ -195,6 +220,24 @@ batt_rib_h       = 1.5;      // 筋径向高度 (从 cavity 内壁向轴心凸�
 pcb_seat_t       = 1.0;      // 定位台厚度 (沿 Z)
 pcb_seat_x_skip  = 12.0;     // X 中心避让 USB 接口 ±半宽
 
+// === v5.1.7 PCB 工装销 (锁定第 6 自由度: +Z 反弹) ============================
+// 利用 PCB 上现有的 Φ1.18 工厂定位孔 (PCB 2.42, 35.35 → wand X=-11.58, Z=15.55)
+// 在 A handle 外壁 -Y 侧打一个 Φ1.3 mm 通孔贯穿到 PCB 平面之上.
+// 装配时 PCB 滑入到位 → 用户从外面插入一根 Φ1.2 mm × 19 mm PLA 销 (独立打印, F 段)
+// 销穿过外壳壁 → PCB Φ1.18 定位孔 → 销头 Φ3 凸缘嵌入外壳 Φ3.2 浅井齐平
+// 锁定后 PCB 完全无法 +Z 反弹, 6 自由度 100% 锁死, 仍可通过拔销维护.
+//
+// 美观: 销头 Φ3 装饰圆点嵌入外壳齐平, 仅在 -Y 一侧, 远离按键面 (+Y), 视觉影响极小
+pcb_pin_x        = -11.58;   // PCB 定位孔 1 在 wand X (= 2.42 - pcb_w/2)
+pcb_pin_z        =  15.55;   // PCB 定位孔 1 在 wand Z (= cavity_z_pcb + (pcb_h - 35.35))
+pcb_pin_dia      =  1.2;     // 销主体直径
+pcb_pin_hole_dia =  1.3;     // 外壳通孔直径 (单边 0.05 间隙)
+pcb_pin_cap_dia  =  3.0;     // 销头装饰圆点直径
+pcb_pin_well_dia =  3.2;     // 外壳浅井直径 (容纳凸缘)
+pcb_pin_cap_t    =  0.5;     // 销头凸缘厚度
+pcb_pin_well_d   =  0.6;     // 外壳浅井深度 (= 凸缘厚 + 0.1 沉入)
+pcb_pin_len      = 19.0;     // 销总长 (从外壁井底到 PCB +Y 上方)
+
 // v5.1.3 删除: 手柄防滑纵向凹槽 (用户要求平滑握持, 凹井按键自带触觉锚点)
 
 // === 渲染精度 ===
@@ -230,9 +273,12 @@ function rod_dia(z) =
     : z <  band_z_top + 6             ? lerp(band_dia, knot_dia_max, smooth_lerp((z-band_z_top)/6, 0.8))
     : z <  knot_z_top - 6             ? knot_dia_max
     : z <  knot_z_top                 ? lerp(knot_dia_max, collar_dia, smooth_lerp((z-(knot_z_top-6))/6, 1.4))
-    // 7. 收颈（短直段，承接螺旋杖身）
+    // 7. 收颈 + 上铜箍（v5.1.4: 把原 4mm Φ16 直筒改为 Φ19 鼓起金属环,
+    //    与 ferrule 对称, 视觉上把雕花结/螺旋杖身"焊"在一起, 不再像断点）
     : z <  collar_z_top               ? collar_dia
-    : z <  collar_z_top + 4           ? lerp(collar_dia, spiral_root_dia, (z-collar_z_top)/4)
+    : z <  collar_z_top + 1           ? lerp(collar_dia, top_ferrule_dia, smooth_lerp((z-collar_z_top)/1, 0.7))
+    : z <  collar_z_top + 3           ? top_ferrule_dia
+    : z <  collar_z_top + 4           ? lerp(top_ferrule_dia, spiral_root_dia, smooth_lerp((z-collar_z_top-3)/1, 0.7))
     // 8. 螺旋杖身（包络锥度，藤蔓装饰由 spiral_vines_module 添加）
     : z <  spiral_z_top               ? lerp(spiral_root_dia, spiral_tip_dia, smooth_lerp((z-collar_z_top-4)/(spiral_z_top-collar_z_top-4), 1.0))
     // 9. 锥尖
@@ -546,6 +592,23 @@ module wand_cavity() {
         //
         // 简化方案: 加一个独立的 batt_ribs() 模块, 在 wand_full 里 union 进去
         // 此处 cavity 模块不处理, 保持纯空腔.
+
+        // ----------------------------------------------------------------
+        // 8. v5.1.7 PCB 工装销孔 (锁定 PCB 第 6 自由度)
+        //    沿 -Y 方向贯穿外壳, 末端到达 PCB +Y 上方约 5mm
+        //    用户装好 PCB 后, 从外壁 -Y 侧插入 Φ1.2 PLA 销 → 锁住 PCB
+        // ----------------------------------------------------------------
+        // 主通孔 (Φ1.3 沿 -Y 方向)
+        //   起点 y = -20 (在外壁外, 确保完全穿透)
+        //   终点 y = +5 (在 PCB +Y 上方, 给销末端留 5mm "暂存空间")
+        translate([pcb_pin_x, -20, pcb_pin_z])
+            rotate([-90, 0, 0])         // 圆柱轴 +Z 转到 wand +Y
+                cylinder(h = 25, d = pcb_pin_hole_dia, $fn = 24);
+        // 销头浅井 (Φ3.2 × 0.6 mm 在外壁 -Y 侧, 容纳销头 Φ3 凸缘齐平)
+        //   井从外壁 -Y 表面 (y ≈ -17, handle 外径 Φ34) 向 -Y 侧凿入 0.6mm
+        translate([pcb_pin_x, -(handle_dia_bot/2 + 0.5), pcb_pin_z])
+            rotate([-90, 0, 0])
+                cylinder(h = pcb_pin_well_d + 0.6, d = pcb_pin_well_dia, $fn = 32);
     }
 }
 
@@ -827,41 +890,98 @@ module preview_payload() {
             cube([batt_w, batt_t, batt_l], center = true);
 }
 
-// ====== 段间装配 =============================================================
-module joint_male(z) {
-    translate([0, 0, z])
-        cylinder(h = joint_len, d = joint_dia, $fn = 32);
-}
-module joint_female(z) {
-    translate([0, 0, z - 0.1])
-        cylinder(h = joint_len + 0.2, d = joint_dia + 0.4, $fn = 32);
-}
+// ====== 段间装配 v5.1.5: M10×1.5 公制螺纹 ====================================
+//
+// metric_thread: 简化的 ISO 60° 三角齿公制螺纹, 由 linear_extrude(twist) 实现
+//   d_maj    = 公称直径 (外螺纹外径; 内螺纹设为名义孔径)
+//   p        = 节距 (mm)
+//   h        = 螺纹有效啮合长度
+//   internal = false: 外螺纹实体, 直接当公柱用
+//              true : 用作内螺纹母孔 (调用方 difference 自己减出)
+//                     internal=true 时齿径 +0.30 (单边), FDM 装配公差
+//
+// 实现细节:
+//   1) 截面 = 中心圆 (r=r_min) + 一个径向三角齿凸 (r=r_min..r_maj)
+//   2) linear_extrude(height=h, twist=-360*h/p) 让截面沿 +Z 螺旋上升
+//      每升 p 完成一圈, 形成一道连续的螺纹齿
+//   3) 齿深 = 0.6 p (近似 ISO Metric 5/8 H, 对 FDM 打印齿不太尖也不太深)
+//
+// 打印朝向建议: 螺纹中心轴 = Z 轴 = 打印床法线方向, 齿是逐层堆叠形成,
+//               不会出现 >45° 悬空, 不需支撑. 对 FDM 极友好.
+module metric_thread(d_maj, p, h, internal = false, inner_dia = 0, fn = 48) {
+    cl       = internal ? 0.30 : 0;
+    r_maj    = d_maj / 2 + cl;
+    r_min    = r_maj - 0.60 * p;            // 齿深 0.6 p
+    n_turn   = h / p;
+    twist    = -360 * n_turn;
+    tooth_y  = p / 3;                       // 齿在切向跨度 (≈ 1/3 节距)
+    eps      = 0.05;                        // 截面联合时极小重叠, 防 manifold
 
-// ====== 段 D：Pommel 铜帽（v5.1.1: 永久固定 + 嵌套榫公凸） ===================
-// 装配工艺: pommel 与 handle 用 PLA 焊接笔 / 快干胶粘合
-//   嵌套榫 (Φ21 公凸出 1mm) 让两段自动对中, 接缝隐藏在嵌套面内
-//   USB 方孔贯穿 pommel 中心区 (与 wand_cavity 第 3 项保持一致)
-module part_pommel() {
-    union() {
-        difference() {
-            pommel_module();
-            // USB 方孔
-            translate([pcb_to_wand_x(usb_cx) - 9.0/2, -4.0/2, -1])
-                cube([9.0, 4.0, pommel_z_top + 2]);
+    // inner_dia > 0 时减出中央通孔 (空心螺纹), 用于 D-A 接缝让 USB 穿过
+    difference() {
+        linear_extrude(height = h, twist = twist,
+                       slices = max(60, round(fn * n_turn)),
+                       convexity = 4) {
+            union() {
+                circle(r = r_min, $fn = fn);
+                polygon([
+                    [r_min - eps, -tooth_y],
+                    [r_maj,        0      ],
+                    [r_min - eps,  tooth_y],
+                ]);
+            }
         }
-        // 嵌套榫公凸 (z=8..9, 高 1.0 mm), 中心避开 USB 方孔
-        difference() {
-            translate([0, 0, pommel_z_top])
-                cylinder(h = pd_tenon_h, d = pd_tenon_dia, $fn = 64);
-            // 公凸内同样要避开 USB 方孔
-            translate([pcb_to_wand_x(usb_cx) - 9.0/2, -4.0/2, pommel_z_top - 0.1])
-                cube([9.0, 4.0, pd_tenon_h + 0.2]);
-        }
+        if (inner_dia > 0)
+            translate([0, 0, -0.5])
+                cylinder(h = h + 1, d = inner_dia, $fn = fn);
     }
 }
 
-// ====== 段 A：Handle 手柄段（z = pommel_z_top .. handle_z_top） =============
-// v5.1.1 增加: 底端嵌套榫母凹 (Φ21.4 凹下 1.1mm), 与 part_pommel 公凸配合粘合
+// joint_male: 公段顶部凸出 M10×1.5×5mm 外螺纹, 直接当实体凸柱使用
+//   z = 公段主体顶面 z 坐标 (从该 z 起向 +Z 凸出 joint_len mm)
+module joint_male(z, d = joint_dia, p = joint_pitch, h = joint_len) {
+    translate([0, 0, z])
+        metric_thread(d_maj = d, p = p, h = h, internal = false);
+}
+
+// joint_female: 母段底部内螺纹孔, 由调用方 difference 减出
+//   z = 母段主体底面 z 坐标 (从该 z 起向 +Z 挖 joint_len+0.2 mm)
+//   入口下沉 0.1mm 让公螺纹起始齿无障碍咬入
+module joint_female(z, d = joint_dia, p = joint_pitch, h = joint_len) {
+    translate([0, 0, z - 0.1])
+        metric_thread(d_maj = d, p = p, h = h + 0.2, internal = true);
+}
+
+// ====== 段 D：Pommel 铜帽（v5.1.6: M16×2 空心螺纹连接, 免胶水） =============
+// 装配工艺: 用户对齐 SW1 朝向 → 把 A handle 套到 D pommel 上 → 顺时针拧 2 整圈
+//             螺纹自锁, 不需要任何胶水. 想拆开维护 PCB / 换电池, 反向拧出即可.
+// 几何要点:
+//   1) pommel 主体 (z=0..8) 不变, USB 方孔贯穿中心
+//   2) 顶部凸出 M16×2 空心螺纹 (z=8..12, 外径 16, 内孔 10)
+//      内孔 Φ10 让 USB-C 9×4 接口体顺利穿过 pommel 接到 PCB 板底
+//   3) 螺纹凸柱外侧到 pommel 边缘 (Φ22) 之间留 (22-16)/2=3mm 平台,
+//      作为 A handle 主体 Φ34 拧到底时的轴向止位面
+module part_pommel() {
+    difference() {
+        union() {
+            pommel_module();
+            // M16×2×4 空心螺纹凸柱 (z=8..12) — D-A 接缝公螺纹
+            translate([0, 0, pommel_z_top])
+                metric_thread(d_maj = da_thread_d, p = da_thread_p,
+                              h = da_thread_h, internal = false,
+                              inner_dia = da_thread_id);
+        }
+        // USB 方孔贯穿 pommel + 螺纹凸柱 (z = -1 .. 13)
+        translate([pcb_to_wand_x(usb_cx) - 9.0/2, -4.0/2, -1])
+            cube([9.0, 4.0, pommel_z_top + da_thread_h + 2]);
+    }
+}
+
+// ====== 段 A：Handle 手柄段（v5.1.6: M16×2 空心螺纹母孔 + M10 顶部公螺纹） ===
+// 双接缝:
+//   (1) 底部 z=8: M16 空心螺纹母孔, 与 D pommel 公螺纹咬合
+//                 中央 Φ10 通孔留给 USB-C 接口体穿过到 PCB
+//   (2) 顶部 z=112: M10×1.5 公螺纹凸柱, 拧入 B decor 母孔
 module part_handle() {
     union() {
         difference() {
@@ -870,12 +990,17 @@ module part_handle() {
                 translate([-50, -50, pommel_z_top])
                     cube([100, 100, handle_z_top - pommel_z_top]);
             }
-            // 嵌套榫母凹 (Φ21.4 = 公凸 + 双边 0.2mm 间隙, 高 1.1mm = 公凸 + 0.1mm 余量)
-            translate([0, 0, pommel_z_top - 0.05])
-                cylinder(h = pd_tenon_h + 0.15,
-                         d = pd_tenon_dia + 2 * pd_tenon_clear,
-                         $fn = 64);
+            // (1) D-A 接缝母孔: M16×2 内螺纹 + 中央 Φ10 USB 通道
+            //     母孔 z 范围 = 7.9 .. 12.1 (= h+0.2, 上下各 0.1mm 入口)
+            translate([0, 0, pommel_z_top])
+                metric_thread(d_maj = da_thread_d, p = da_thread_p,
+                              h = da_thread_h + 0.2, internal = true,
+                              inner_dia = da_thread_id);
+            // 入口下沉 0.1mm: 让公螺纹起始齿无障碍咬入
+            translate([0, 0, pommel_z_top - 0.1])
+                cylinder(h = 0.15, d = da_thread_d + 0.6, $fn = 64);
         }
+        // (2) A-B 接缝公柱: M10×1.5×5 螺纹凸出
         joint_male(handle_z_top);
     }
 }
@@ -957,6 +1082,29 @@ module part_button_pin() {
         }
 }
 
+// ====== 段 F: PCB 工装销 (v5.1.7) ============================================
+// 装配时用户从 A handle 外壁 -Y 侧的 Φ1.3 通孔插入此销, 穿过 PCB 板的 Φ1.18
+// 工厂定位孔, 锁定 PCB 不能 +Z 反弹. 装好后销头 Φ3 凸缘嵌入外壳浅井齐平.
+// 销头底面磨掉一小圈 (Φ2.5×0.2mm 凹) 留指甲槽, 用户可以用指甲撬出维护.
+module part_pcb_pin() {
+    color("ivory")
+        difference() {
+            union() {
+                // 主销 Φ1.2 × pcb_pin_len
+                cylinder(h = pcb_pin_len, d = pcb_pin_dia, $fn = 16);
+                // 销头 Φ3 装饰圆点 (沉入外壳浅井)
+                translate([0, 0, pcb_pin_len])
+                    cylinder(h = pcb_pin_cap_t, d = pcb_pin_cap_dia, $fn = 32);
+            }
+            // 销头底面指甲槽 Φ2.5 × 0.2mm (从 -Y 表面凹入)
+            translate([0, 0, pcb_pin_len + pcb_pin_cap_t - 0.2])
+                cylinder(h = 0.25, d = 2.5, $fn = 32);
+            // 销尖端 45° 倒角 (装配时容易找正 PCB 定位孔)
+            translate([0, 0, -0.01])
+                cylinder(h = 0.3, d1 = pcb_pin_dia + 0.2, d2 = 0.6, $fn = 16);
+        }
+}
+
 // ====== 主入口 ==============================================================
 module render_part(p = PART) {
     if      (p == "A")        color("saddlebrown")  part_handle();
@@ -964,6 +1112,7 @@ module render_part(p = PART) {
     else if (p == "C")        color("saddlebrown")  part_shaft();
     else if (p == "D")        color("darkgoldenrod") part_pommel();
     else if (p == "E")        part_button_pin();
+    else if (p == "F")        part_pcb_pin();
     else if (p == "PREVIEW")  {
         color("saddlebrown") wand_full();
         preview_payload();
