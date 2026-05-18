@@ -90,6 +90,8 @@ enclosure/stl/*
 !enclosure/stl/lucius_body2.stl
 !enclosure/stl/lucius_snake_head.stl
 !enclosure/stl/lucius_snake_head_clean.stl
+!enclosure/stl/lucius_snake_head_left.stl
+!enclosure/stl/lucius_snake_head_right.stl
 
 # 3D 外壳临时调试用渲染脚本 (一次性 v5/v51 验证, 非工程核心)
 #   工程入口只保留: elder_wand.scad (主源) + render_preview.scad (基础预览)
