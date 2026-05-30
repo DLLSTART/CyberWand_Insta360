@@ -21,8 +21,9 @@ public:
 
     /**
      * @brief 初始化IMU
+     * @return true = 初始化成功; false = 硬件不可达
      */
-    virtual void Init() = 0;
+    virtual bool Init() = 0;
 
     /**
      * @brief 获取采样数据

@@ -32,41 +32,30 @@ Mpu6050IMU::Mpu6050IMU() : BaseIMU() {
     SetSamplePeriod(IMU_SAMPLING_TIME_MS);
     SetSampleCount(IMU_SEQUENCE_LENGTH_MAX);
 }
-void Mpu6050IMU::Init() {
+bool Mpu6050IMU::Init() {
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-    // ESP32-S3 默认 Wire 引脚 (Arduino 框架定义) 与本板原理图实际走线 (IO47/IO20)
-    // 不同, 必须显式传入. 否则 begin() 用的是默认 IO, scanner 完全看不到 0x68.
-    // 引脚号定义在 board_config.h, 改板子只改那一处.
-    Wire.begin(cw::board::kPinI2cSda, cw::board::kPinI2cScl);
-    Wire.setClock(cw::board::kI2cClockHz);
+    // 幂等: 如果 Wire 已被外部 (main 自检 / I2C scanner) 初始化, 跳过重复 begin.
+    if (!i2c_ready_) {
+        Wire.begin(cw::board::kPinI2cSda, cw::board::kPinI2cScl);
+        Wire.setClock(cw::board::kI2cClockHz);
+    }
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
     Fastwire::setup(static_cast<uint16_t>(cw::board::kI2cClockHz / 1000), true);
     #endif
 
     mpu.initialize();
-    if(mpu.testConnection() ==  false){
-        ILOGN("MPU6050 connection failed");
-        while(true);
-    } else{
-        Serial.println("MPU6050 connection successful");
+    if (mpu.testConnection() == false) {
+        Serial.println("[imu] MPU6050 connection FAILED (check wiring: SDA/SCL/pullup)");
+        return false;
     }
+    Serial.println("[imu] MPU6050 connection OK");
 
-    // mpu.setXAccelOffset(0); //Set your accelerometer offset for axis X
-    // mpu.setYAccelOffset(0); //Set your accelerometer offset for axis Y
-    // mpu.setZAccelOffset(0); //Set your accelerometer offset for axis Z
-    // mpu.setXGyroOffset(0);  //Set your gyro offset for axis X
-    // mpu.setYGyroOffset(0);  //Set your gyro offset for axis Y
-    // mpu.setZGyroOffset(0);  //Set your gyro offset for axis Z
+    i2c_ready_ = true;
 
-    // 1. 临时将加速度计设为默认的 ±2g 量程，迎合校准函数的胃口
-    // mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2); 
-    
-    // 2. 确保此时传感器绝对平放、静止，并且芯片正面朝上！然后执行校准
     mpu.CalibrateAccel(6);
     mpu.CalibrateGyro(6);
-    
-    // 3. 校准完成后，切回你项目需要的 ±4g 量程
-    // mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
+
+    return true;
 }
 
 void Mpu6050IMU::Init(uint16_t sample_period_ms, uint16_t sample_count) {

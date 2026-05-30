@@ -44,10 +44,14 @@ public:
 
     /**
      * @brief 初始化IMU
+     * @return true = I2C 连接成功; false = MPU6050 不可达 (I2C 扫描无设备 / whoami 失败)
      */
-    void Init() override;
+    bool Init() override;
 
     void Init(uint16_t sample_period_ms, uint16_t sample_count);
+
+    /** @brief 查询 I2C 总线是否已成功初始化 (供 main 自检使用) */
+    bool IsI2cReady() const { return i2c_ready_; }
 
     /**
      * @brief 获取采样数据 (固定 GetSampleCount() 帧, 阻塞)
@@ -120,6 +124,7 @@ public:
 
 private:
     MPU6050 mpu;
+    bool i2c_ready_ = false;
 };
 }
 }

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include "board_config.h"   // 板级 GPIO / 颜色常量, 替代旧硬编码引脚号
+#include "protocol_config.h" // BLE GAP name
 #include "mpu6050_imu.h"
 #include "cnn.h"
 #include "imu_resampler.h"
@@ -105,52 +106,132 @@ static void dispatch_gesture_to_ble(cw::cnn::ActionType action) {
 
 
 /**
- * 系统一次性初始化, 在 setup() 阶段调用.
+ * 开机自检: I2C 总线扫描.
+ *
+ * 在 MPU6050 驱动初始化之前先扫一遍 I2C 总线, 确认外设是否真的在线.
+ * 扫描范围 0x03~0x77 (标准 7-bit 地址), 每个地址发一个 1-byte read,
+ * ACK = 设备在线, NACK = 无设备.
+ *
+ * 典型结果:
+ *   - MPU6050 默认地址 = 0x68
+ *   - 部分模块通过 AD0 引脚拉高后地址 = 0x69
+ *
+ * 如果总线上完全没有设备, 后续 MPU6050 Init() 一定会失败, 提前告知用户
+ * 检查 SDA/SCL 接线和上拉电阻.
+ */
+static void boot_i2c_scan(void) {
+  Serial.println("[selftest] I2C bus scan:");
+  uint8_t found = 0;
+  for (uint8_t addr = 0x03; addr < 0x78; ++addr) {
+    Wire.beginTransmission(addr);
+    uint8_t err = Wire.endTransmission();
+    if (err == 0) {
+      Serial.printf("[selftest]   device found at 0x%02X\n", addr);
+      ++found;
+    }
+  }
+  if (found == 0) {
+    Serial.println("[selftest]   NO devices found! Check SDA/SCL wiring and pull-up resistors.");
+  } else {
+    Serial.printf("[selftest]   %u device(s) on bus\n", found);
+  }
+}
+
+
+/**
+ * 系统一次性初始化 + 开机自检.
  *
  * 流程:
  *   1) 串口 115200 用于日志
- *   2) 提升 loop 任务优先级至 3, 让按键 / IMU 处理更及时
- *      (默认是 1, 可能被一些后台任务抢占影响实时性)
- *   3) 初始化 IMU 与 CNN 推理引擎 (I2C 引脚由 board_config.h 提供)
- *   4) 注册触摸开关 (board_config.h::kPinTouchSwitch) 并启动按键管理器
- *   5) 注册状态 LED (board_config.h::kPinLed1Data, WS2812B) 并启动 LED 管理器
- *   6) 初始化 BLE 协议栈 (启动可发现广播)
+ *   2) 提升 loop 任务优先级至 3
+ *   3) I2C 总线初始化 + 扫描 (自检)
+ *   4) MPU6050 初始化 (自检: 连接 / 校准 / DRDY 中断引脚)
+ *   5) 触摸开关引脚初始化 + 读取测试 (自检)
+ *   6) CNN 推理引擎初始化
+ *   7) 按键管理器启动
+ *   8) LED 管理器启动
+ *   9) BLE 协议栈初始化
+ *  10) 打印自检总结
  *
- * 所有 GPIO 字面值都不在本文件出现, 板子换了只改 board_config.h 即可.
+ * 任何自检失败都会打印日志但不会死循环, 确保系统始终能进入 loop().
  */
 void system_init(void) {
   Serial.begin(115200);
+  delay(500);  // 等待串口稳定
 
-  // 1. 获取并打印原本的优先级 (通常 ESP32 默认是 1)
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("  CyberWand Boot Self-Test");
+  Serial.println("========================================");
+
+  // --- 任务优先级 ---
   UBaseType_t default_priority = uxTaskPriorityGet(NULL);
-  Serial.printf("[system] loop Priority: %d\n", default_priority);
-
-  // 2. 修改 loop 任务的优先级 (例如提高到 3)
+  Serial.printf("[system] loop task priority: %d -> 3\n", default_priority);
   vTaskPrioritySet(NULL, 3);
 
-  // 3. 验证是否修改成功
-  UBaseType_t new_priority = uxTaskPriorityGet(NULL);
-  Serial.printf("[system] loop Priority: %d\n", new_priority);
+  // --- I2C 总线自检 ---
+  Serial.printf("[selftest] I2C init: SDA=GPIO%u, SCL=GPIO%u, %u kHz\n",
+                cw::board::kPinI2cSda, cw::board::kPinI2cScl,
+                cw::board::kI2cClockHz / 1000);
+  Wire.begin(cw::board::kPinI2cSda, cw::board::kPinI2cScl);
+  Wire.setClock(cw::board::kI2cClockHz);
+  boot_i2c_scan();
 
-  cw::imu::Mpu6050IMU::GetInstance().Init();
-  // 启用 DRDY 中断: 让采样从 "vTaskDelay 忙等" 升级为 "硬件触发唤醒",
-  // 释放 ~70% 的采样间隙 CPU 给 BLE / button / LED 等任务. 失败也不阻塞,
-  // capture_press_to_release 内有 R5 兜底, 自动退化为原 vTaskDelay 节奏.
-  cw::imu::Mpu6050IMU::GetInstance().EnableDataReadyInterrupt(
-      cw::board::kPinImuInt);
+  // --- MPU6050 初始化 (含自检) ---
+  bool imu_ok = cw::imu::Mpu6050IMU::GetInstance().Init();
+  if (imu_ok) {
+    Serial.println("[selftest] MPU6050: PASS");
 
+    // DRDY 中断引脚测试
+    Serial.printf("[selftest] IMU INT pin: GPIO%u\n", cw::board::kPinImuInt);
+    bool int_ok = cw::imu::Mpu6050IMU::GetInstance().EnableDataReadyInterrupt(
+        cw::board::kPinImuInt);
+    if (int_ok) {
+      Serial.println("[selftest] IMU DRDY interrupt: ENABLED");
+    } else {
+      Serial.println("[selftest] IMU DRDY interrupt: FAILED (will use polling fallback)");
+    }
+  } else {
+    Serial.println("[selftest] MPU6050: FAIL - gesture recognition will be disabled");
+  }
+
+  // --- CNN 推理引擎 ---
   cw::cnn::ActionRecognitionCNN::GetInstance().Init();
+  Serial.println("[selftest] CNN engine: initialized");
 
+  // --- 触摸开关自检 ---
+  Serial.printf("[selftest] Touch switch: GPIO%u (active HIGH)\n",
+                cw::board::kPinTouchSwitch);
+  pinMode(cw::board::kPinTouchSwitch, INPUT_PULLDOWN);
+  delay(10);
+  int touch_val = digitalRead(cw::board::kPinTouchSwitch);
+  Serial.printf("[selftest] Touch switch initial read: %d (%s)\n",
+                touch_val, touch_val ? "TOUCHED" : "idle");
+
+  // --- 按键管理器 ---
   cw::button::ButtonManager::GetInstance().AddButton(
       cw::board::kPinTouchSwitch, cw::button::ButtonType::JoystickBtn, HIGH);
   cw::button::ButtonManager::GetInstance().Begin();
+  Serial.println("[selftest] Button manager: started");
 
-  // WS2812B 单线智能 LED, 不需要 active_level (旧 PWM 接口已被移除).
+  // --- LED 管理器 ---
   cw::led::LedManager::GetInstance().AddLed(
       cw::board::kPinLed1Data, cw::board::kLed1Count, cw::led::LedType::Status);
   cw::led::LedManager::GetInstance().Begin();
+  Serial.println("[selftest] LED manager: started");
 
+  // --- BLE ---
   cw::ble::BleRemote::GetInstance().Init();
+  Serial.println("[selftest] BLE: started");
+
+  // --- 自检总结 ---
+  Serial.println("========================================");
+  Serial.printf("  IMU:        %s\n", imu_ok ? "OK" : "FAIL");
+  Serial.printf("  Touch:      GPIO%u (%s)\n",
+                cw::board::kPinTouchSwitch, touch_val ? "TOUCHED" : "idle");
+  Serial.printf("  BLE:        advertising as \"%s\"\n",
+                cw::ble::cfg::kRemoteGapName);
+  Serial.println("========================================");
 }
 
 
