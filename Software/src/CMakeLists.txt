@@ -1,0 +1,68 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "base/base.cpp"
+        "imu/base_imu.cpp"
+        "imu/mpu6050_imu.cpp"
+        "button/button.cpp"
+        "led/led.cpp"
+        "common/common.cpp"
+        "ble/ble_remote.cpp"
+        "ble/command_codec.cpp"
+        "ble/paired_store.cpp"
+        "ble/remote_frame.cpp"
+        "cnn/cnn.cpp"
+        "cnn/imu_resampler.cpp"
+        "cnn/nnom_lib/src/core/nnom.c"
+        "cnn/nnom_lib/src/core/nnom_layers.c"
+        "cnn/nnom_lib/src/core/nnom_tensor.c"
+        "cnn/nnom_lib/src/core/nnom_utils.c"
+        "cnn/nnom_lib/src/layers/nnom_activation.c"
+        "cnn/nnom_lib/src/layers/nnom_avgpool.c"
+        "cnn/nnom_lib/src/layers/nnom_baselayer.c"
+        "cnn/nnom_lib/src/layers/nnom_concat.c"
+        "cnn/nnom_lib/src/layers/nnom_conv2d.c"
+        "cnn/nnom_lib/src/layers/nnom_conv2d_trans.c"
+        "cnn/nnom_lib/src/layers/nnom_cropping.c"
+        "cnn/nnom_lib/src/layers/nnom_dense.c"
+        "cnn/nnom_lib/src/layers/nnom_dw_conv2d.c"
+        "cnn/nnom_lib/src/layers/nnom_flatten.c"
+        "cnn/nnom_lib/src/layers/nnom_global_pool.c"
+        "cnn/nnom_lib/src/layers/nnom_gru_cell.c"
+        "cnn/nnom_lib/src/layers/nnom_input.c"
+        "cnn/nnom_lib/src/layers/nnom_lambda.c"
+        "cnn/nnom_lib/src/layers/nnom_lstm_cell.c"
+        "cnn/nnom_lib/src/layers/nnom_matrix.c"
+        "cnn/nnom_lib/src/layers/nnom_maxpool.c"
+        "cnn/nnom_lib/src/layers/nnom_output.c"
+        "cnn/nnom_lib/src/layers/nnom_reshape.c"
+        "cnn/nnom_lib/src/layers/nnom_rnn.c"
+        "cnn/nnom_lib/src/layers/nnom_simple_cell.c"
+        "cnn/nnom_lib/src/layers/nnom_softmax.c"
+        "cnn/nnom_lib/src/layers/nnom_sumpool.c"
+        "cnn/nnom_lib/src/layers/nnom_upsample.c"
+        "cnn/nnom_lib/src/layers/nnom_zero_padding.c"
+        "cnn/nnom_lib/src/backends/nnom_local.c"
+        "cnn/nnom_lib/src/backends/nnom_local_q15.c"
+
+    INCLUDE_DIRS
+        "../include"
+        "base"
+        "common"
+        "imu"
+        "button"
+        "led"
+        "ble"
+        "cnn"
+        "cnn/nnom_lib/inc"
+        "cnn/nnom_lib/port"
+
+    REQUIRES
+        driver
+        bt
+        nvs_flash
+        esp_timer
+)
+
+# Override -Werror: append -Wno-error so it appears AFTER ESP-IDF's -Werror
+idf_build_set_property(COMPILE_OPTIONS "-Wno-error" APPEND)

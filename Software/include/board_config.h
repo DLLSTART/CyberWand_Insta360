@@ -42,6 +42,10 @@ constexpr uint8_t kPinKey1            = 2;
 constexpr uint8_t kPinLed1Data        = 42;
 constexpr uint16_t kLed1Count         = 1;
 
+// --- 状态 LED (snake_temp: 普通 GPIO LED, 替代 WS2812B) ------------------
+// 开发板上接一个普通 LED (串联 220ohm 电阻) 到此 GPIO
+constexpr uint8_t kPinStatusLed       = 2;
+
 // --- IMU (MPU6050, I2C) --------------------------------------------------
 //   SCL -> GPIO17, SDA -> GPIO18, INT -> GPIO16
 constexpr uint8_t kPinI2cSda          = 18;
@@ -58,7 +62,12 @@ constexpr uint8_t kPinTouchSwitch     = 4;
 constexpr uint8_t kPinChargeStat      = 5;
 
 // --- I2C 总线频率 -------------------------------------------------------
-constexpr uint32_t kI2cClockHz        = 400000;   // 400 kHz Fast Mode, IMU datasheet 上限
+// ⚠️ 使用 100kHz 标准模式 (非 400kHz Fast Mode)
+// 临时开发板的 MPU6050 模块如果没有外部 4.7K 上拉电阻,
+// 仅靠 ESP32 内部弱上拉 (~45K ohm), 400kHz 下信号边沿太慢,
+// I2C 地址探测能过但 repeated-START 寄存器读取会失败.
+// 100kHz 可以在无外部上拉的情况下稳定工作.
+constexpr uint32_t kI2cClockHz        = 100000;   // 100 kHz Standard Mode
 
 // --- IMU 中断驱动参数 ---------------------------------------------------
 //   采用"中断为主 + 轮询兜底"策略, 节省 MCU 在采样间隙的 CPU 占用:
