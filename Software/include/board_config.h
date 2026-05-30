@@ -1,27 +1,19 @@
 // =============================================================================
 // board_config.h —— CyberWand 硬件相关常量集中定义
 // -----------------------------------------------------------------------------
-// 板硬件: ESP32-S3-WROOM-1-N16R8 (16 MB Flash + 8 MB Octal PSRAM)
-//        + WS2812B 智能 LED + InvenSense 系列 IMU (I2C) + USB→CH340 转串口
-// 原理图: HardWare/schematic/P1.Schematic1
-// 硬件文档: HardWare/cyberwand_hardware_v3.md (v4.0)
+// snake_temp 分支: ESP32-S3 N16R8 开发板 + MPU6050 模块 + 触摸开关 (临时验证方案)
+// snake_master 分支: 自制 PCB (ESP32-S3 + IMU + 按键 + WS2812B + 充电管理)
 //
-// 本文件是软件层与 PCB 之间的"单一接口". 板子换了 / 引脚改了, 只需改这一处,
+// 本文件是软件层与硬件之间的"单一接口". 板子换了 / 引脚改了, 只需改这一处,
 // 所有模块自动跟随. 不要在其它源文件里硬编码引脚号.
 //
-// ⚠️ 关键约束 - N16R8 内置 Octal PSRAM
+// ⚠️ 关键约束 - N16R8 内置 Octal PSRAM (当前临时禁用)
 //   ESP32-S3 N16R8 的 8MB Octal PSRAM 占用 IO33~IO37 (SPI 数据 + WP + HD)
 //   外加 IO26~IO32 (SPI 总线 + CS), 即 IO26~IO37 共 12 个 IO 完全被 PSRAM
 //   占用, 软件代码访问会让 PSRAM 通信失败甚至导致崩溃 / 看门狗重启.
 //   本文件结尾用 static_assert 防止误用这些引脚.
-//
-// ⚠️ v4.0 已识别的硬件设计风险 (详见 HardWare/cyberwand_hardware_v3.md §0.2)
-//   R1 — I2C SDA/SCL 没有外部 4.7K 上拉; 首板可能需要飞线
-//   R2 — USB-C CC1/CC2 悬空 (无 5.1K 下拉); 烧录必须用 USB-A → USB-C 线
-//   R3 — LDO1 CE 引脚直接接 GND; 若 LDO 是 CE 高有效, 整板没电, 上电前万用表测 LDO 输出
-//   R4 — 充电流 R5 = 2kΩ → 600mA, 对 300mAh 电池偏高 (~2C); 长期使用建议改 4.7kΩ → 250mA
-//   R5 — IMU pin 11 标 FSYNC 但接 INT 网络, pin 12 标 INT 但悬空; 软件用"中断为主+轮询兜底",触发自动回退
-//   R6 — 没有 VBAT ADC 采样电路; 当前固件无电量监测, 后续改板需加分压 + 飞线到空闲 ADC IO
+//   ⚠️ 临时分支已禁用 PSRAM (platformio.ini 未配置 memory_type),
+//      IO26~IO37 理论上可做 GPIO, 但 static_assert 保留约束以兼容主分支.
 // =============================================================================
 #pragma once
 #include <stdint.h>
@@ -30,58 +22,39 @@ namespace cw {
 namespace board {
 
 // ===========================================================================
-// 1. GPIO 引脚映射 (与原理图 P1 / MCU.png 严格一致)
+// 1. GPIO 引脚映射 (snake_temp 临时开发板接线)
 // ---------------------------------------------------------------------------
-// 引脚号通过仔细阅读 enclosure/MCU.png + IMU.png + 充电.png 的网络标号确定:
-//   左侧 pin 3..14   (EN / IO4 / IO5 / ... / IO20)
-//   右侧 pin 27..38  (IO0 / IO35..42 / RXD0 / TXD0 / IO2)
-//   底部 pin 15..26  (大量 NC + IO47 引出 SDA)
-// 实物焊好首板后, 用万用表对照原理图任意一条 IO 网络回测, 不准时**只改这里**.
+//   MPU6050 SCL  -> GPIO17
+//   MPU6050 SDA  -> GPIO18
+//   MPU6050 INT  -> GPIO16
+//   触摸开关信号  -> GPIO4  (active HIGH, 触摸时输出高电平)
+//
+//   以下引脚来自主分支 PCB 定义, 临时分支未使用但保留编译兼容:
+//   kPinKey1       = GPIO2  (原 SW1 按键, 临时分支改为触摸开关)
+//   kPinLed1Data   = GPIO42 (WS2812B, 临时开发板未接)
+//   kPinChargeStat = GPIO5  (充电状态, 临时开发板未接)
 // ===========================================================================
 
-// --- 主按键 (SW1) -------------------------------------------------------
-//   原理图 (MCU.png): SW1 一端接 GND, 另一端 KEY_1 网络
-//                    经 R2=10K 上拉到 +3V3, 接到模组 pin 38 = IO2
-//   软件:   pinMode(INPUT_PULLUP) + 按下读到 LOW (内部弱上拉做冗余)
+// --- 主按键 (SW1, 仅主分支 PCB 使用; 临时分支用触摸开关代替) ------------
 constexpr uint8_t kPinKey1            = 2;
 
-// --- 主指示灯 (LED1, WS2812B) ------------------------------------------
-//   原理图 (MCU.png): LED1 DIN <- MCU pin 35 = IO42 (LED_IN 网络)
-//                    LED1 DOUT -> H1 跳线 (3 pin: +3V3 / LED_OUT / GND, 预留级联)
-//   驱动:   必须用 RMT / Adafruit NeoPixel, 不能 digitalWrite
+// --- 主指示灯 (LED1, WS2812B, 仅主分支 PCB 使用) ------------------------
 constexpr uint8_t kPinLed1Data        = 42;
-constexpr uint16_t kLed1Count         = 1;    // 当前布板 1 颗主灯, 后续如级联多颗就改这个
+constexpr uint16_t kLed1Count         = 1;
 
-// --- IMU (U4, I2C) ------------------------------------------------------
-//   SDA -> GPIO18
-//     SCL -> GPIO17
-//     INT -> GPIO16
-//   ⚠️ R1 风险: 原理图上 SDA/SCL 没看到外部上拉电阻, 仅靠内部弱上拉.
-//                首板若 I2C scanner 看不到 0x68, 优先飞 4.7K 上拉到 +3V3.
+// --- IMU (MPU6050, I2C) --------------------------------------------------
+//   SCL -> GPIO17, SDA -> GPIO18, INT -> GPIO16
 constexpr uint8_t kPinI2cSda          = 18;
 constexpr uint8_t kPinI2cScl          = 17;
-//   IMU DRDY 中断输入 (节能 ~70%):
-//                Mpu6050IMU::EnableDataReadyInterrupt(kPinImuInt) 配 100Hz,
-//                capture_press_to_release 阻塞等中断;
-//                如果中断 15ms 内不来, 软件自动切到 7ms vTaskDelay 兜底
-//                (打 ILOGT "[imu] DRDY interrupt timeout" 提示用户 R5 已触发).
+//   IMU DRDY 中断: 正常由硬件触发采样, 超时自动回退到轮询模式
 constexpr uint8_t kPinImuInt          = 16;
 
-// --- 触摸开关 (Touch Switch) --------------------------------------------
-//   触摸开关信号引脚 -> GPIO4 (active HIGH, 触摸时输出高电平)
-//   用于魔杖手势捕捉触发: 触摸=按下开始采样, 松开=停止采样并识别
+// --- 触摸开关 (snake_temp 临时方案) --------------------------------------
+//   信号引脚 -> GPIO4, active HIGH
+//   触摸=开始采样手势, 松开=停止采样并识别
 constexpr uint8_t kPinTouchSwitch     = 4;
 
-// --- 充电状态 (CHRG) ----------------------------------------------------
-//   原理图 (充电.png + MCU.png): 充电 IC U3 pin 1 (CHRG 开漏输出)
-//     -> R3=10K + LED2 (充电指示) -> +5V
-//     -> 同时回到 MCU pin 5 = IO5
-//   软件: pinMode(INPUT_PULLUP); LOW 表示充电中, 高阻表示充满 / 未插 USB
-//   ⚠️ R4 风险: 充电流由 PROG 脚 R5 = 2 kΩ 决定 ≈ 600 mA, 对 300mAh 电池
-//                偏高 (~2C); 若电池长期发热 > 45°C, 把 R5 换成 4.7 kΩ → 250 mA.
-//   ⚠️ R6 风险: 没有 VBAT ADC 分压采样 (R4/R6 = 100K 是 Q1 栅极偏置, 不是 ADC).
-//                软件无法读电池电量; 若将来要加, 推荐用 IO6 / IO7 / IO15~IO19
-//                这些左侧空闲 ADC1 通道.
+// --- 充电状态 (仅主分支 PCB 使用) ----------------------------------------
 constexpr uint8_t kPinChargeStat      = 5;
 
 // --- I2C 总线频率 -------------------------------------------------------
@@ -157,10 +130,12 @@ static_assert(IsSafeGpioForN16R8(kPinChargeStat),
 constexpr bool IsStrappingPin(uint8_t pin) {
     return pin == 0 || pin == 3 || pin == 45 || pin == 46;
 }
-// strapping pin 上接外设是 OK 的 (例如 IO0 接 BOOT 控制电路本身就符合设计),
-// 但接按键 / LED 这种用户随手触发的 IO 必须避开 - 否则上电时序坏掉.
+// strapping pin 接外设本身可能符合设计 (如 IO0 接 BOOT 电路),
+// 但接按键/触摸开关等用户触发的 IO 必须避开, 否则影响上电时序.
 static_assert(!IsStrappingPin(kPinKey1),
               "kPinKey1 must not be a strapping pin (would corrupt boot mode)");
+static_assert(!IsStrappingPin(kPinTouchSwitch),
+              "kPinTouchSwitch must not be a strapping pin");
 
 }  // namespace board
 }  // namespace cw

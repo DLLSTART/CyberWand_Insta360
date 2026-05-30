@@ -3,8 +3,8 @@
 #include "freertos/task.h"
 #define ILOGN Serial.println
 #define ILOGT Serial.printf
-#define SleepMs(ms) vTaskDelay((ms))
-#define SleepS(s) vTaskDelay(((s)*1000))
+#define SleepMs(ms) vTaskDelay(pdMS_TO_TICKS(ms))
+#define SleepS(s) vTaskDelay(pdMS_TO_TICKS((s)*1000))
 
 namespace cw {
 namespace base {
