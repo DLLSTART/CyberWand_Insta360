@@ -53,23 +53,24 @@ constexpr uint8_t kPinLed1Data        = 42;
 constexpr uint16_t kLed1Count         = 1;    // 当前布板 1 颗主灯, 后续如级联多颗就改这个
 
 // --- IMU (U4, I2C) ------------------------------------------------------
-//   原理图 (MCU.png + IMU.png):
-//     SDA -> MCU pin 24 = IO47 (从模组底部引出)
-//     SCL -> MCU pin 14 = IO20
-//     INT -> MCU pin 4  = IO4
+//   SDA -> GPIO18
+//     SCL -> GPIO17
+//     INT -> GPIO16
 //   ⚠️ R1 风险: 原理图上 SDA/SCL 没看到外部上拉电阻, 仅靠内部弱上拉.
 //                首板若 I2C scanner 看不到 0x68, 优先飞 4.7K 上拉到 +3V3.
-constexpr uint8_t kPinI2cSda          = 47;
-constexpr uint8_t kPinI2cScl          = 20;
-//   ⚠️ R5 风险: IMU 端 pin 11 丝印是 "FSYNC" 但接到 INT 网络, pin 12 标 "INT"
-//                却悬空 - 可能是丝印误标. 软件用作 DRDY 中断输入 (节能 ~70%):
+constexpr uint8_t kPinI2cSda          = 18;
+constexpr uint8_t kPinI2cScl          = 17;
+//   IMU DRDY 中断输入 (节能 ~70%):
 //                Mpu6050IMU::EnableDataReadyInterrupt(kPinImuInt) 配 100Hz,
 //                capture_press_to_release 阻塞等中断;
 //                如果中断 15ms 内不来, 软件自动切到 7ms vTaskDelay 兜底
 //                (打 ILOGT "[imu] DRDY interrupt timeout" 提示用户 R5 已触发).
-//                想恢复中断节能, 飞线: 切断 IMU pin 11 (FSYNC) 现走线,
-//                把 IMU pin 12 (真 INT) 接到 IO4.
-constexpr uint8_t kPinImuInt          = 4;
+constexpr uint8_t kPinImuInt          = 16;
+
+// --- 触摸开关 (Touch Switch) --------------------------------------------
+//   触摸开关信号引脚 -> GPIO4 (active HIGH, 触摸时输出高电平)
+//   用于魔杖手势捕捉触发: 触摸=按下开始采样, 松开=停止采样并识别
+constexpr uint8_t kPinTouchSwitch     = 4;
 
 // --- 充电状态 (CHRG) ----------------------------------------------------
 //   原理图 (充电.png + MCU.png): 充电 IC U3 pin 1 (CHRG 开漏输出)
@@ -142,6 +143,8 @@ static_assert(IsSafeGpioForN16R8(kPinI2cScl),
               "kPinI2cScl conflicts with N16R8 PSRAM/missing pins (IO22~37)");
 static_assert(IsSafeGpioForN16R8(kPinImuInt),
               "kPinImuInt conflicts with N16R8 PSRAM/missing pins (IO22~37)");
+static_assert(IsSafeGpioForN16R8(kPinTouchSwitch),
+              "kPinTouchSwitch conflicts with N16R8 PSRAM/missing pins (IO22~37)");
 static_assert(IsSafeGpioForN16R8(kPinChargeStat),
               "kPinChargeStat conflicts with N16R8 PSRAM/missing pins (IO22~37)");
 

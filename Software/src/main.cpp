@@ -112,7 +112,7 @@ static void dispatch_gesture_to_ble(cw::cnn::ActionType action) {
  *   2) 提升 loop 任务优先级至 3, 让按键 / IMU 处理更及时
  *      (默认是 1, 可能被一些后台任务抢占影响实时性)
  *   3) 初始化 IMU 与 CNN 推理引擎 (I2C 引脚由 board_config.h 提供)
- *   4) 注册按键 (board_config.h::kPinKey1) 并启动按键管理器
+ *   4) 注册触摸开关 (board_config.h::kPinTouchSwitch) 并启动按键管理器
  *   5) 注册状态 LED (board_config.h::kPinLed1Data, WS2812B) 并启动 LED 管理器
  *   6) 初始化 BLE 协议栈 (启动可发现广播)
  *
@@ -142,7 +142,7 @@ void system_init(void) {
   cw::cnn::ActionRecognitionCNN::GetInstance().Init();
 
   cw::button::ButtonManager::GetInstance().AddButton(
-      cw::board::kPinKey1, cw::button::ButtonType::JoystickBtn);
+      cw::board::kPinTouchSwitch, cw::button::ButtonType::JoystickBtn, HIGH);
   cw::button::ButtonManager::GetInstance().Begin();
 
   // WS2812B 单线智能 LED, 不需要 active_level (旧 PWM 接口已被移除).

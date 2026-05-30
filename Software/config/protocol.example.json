@@ -9,7 +9,7 @@
 
     "ble": {
         "_doc": "GATT server parameters announced by the wand.",
-        "gap_name":            "CyberWand",
+        "gap_name":            "Insta360 Gps Remote",
         "service_uuid16":      "0xFFE0",
         "write_char_uuid16":   "0xFFE1",
         "notify_char_uuid16":  "0xFFE2",

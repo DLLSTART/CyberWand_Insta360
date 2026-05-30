@@ -106,7 +106,9 @@ ButtonManager& ButtonManager::GetInstance() {
 }
 
 void ButtonManager::AddButton(uint8_t pin, ButtonType t, bool active_level) {
-    pinMode(pin, INPUT_PULLUP); 
+    // active LOW  -> INPUT_PULLUP   (按键接地, 空闲时上拉为 HIGH)
+    // active HIGH -> INPUT_PULLDOWN (触摸开关输出 HIGH 表示触发, 空闲时下拉为 LOW)
+    pinMode(pin, active_level ? INPUT_PULLDOWN : INPUT_PULLUP);
     buttons.emplace_back(pin, t, active_level);
 }
 
