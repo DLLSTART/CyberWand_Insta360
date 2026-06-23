@@ -1,32 +1,112 @@
 """
 CyberWand Control Center - BLE 连接器
+
+协议说明 (与固件 protocol_config.h 保持一致):
+  - 设备名         : "CyberWand"
+  - 主服务         : 0xFFE0  (BTCTRL service)
+  - Write 特征     : 0xFFE1  (Host -> Wand 命令)
+  - Notify 特征    : 0xFFE2  (Wand -> Host 通知)
+  - Battery 服务   : 0x180F, Battery Level 特征 0x2A19 (标准 GATT)
+
+帧格式 (出向, Host -> Wand):
+  [HEAD 3B: AA BB CC][CMD 1B][END|SN 1B][SIZE 1B][DATA SIZE B]
+
+帧格式 (入向, Wand -> Host):
+  [HEAD 3B: CC BB AA][CMD 1B][END|SN 1B][SIZE 1B][DATA SIZE B]
+
+支持的入向命令 (Wand -> Host):
+  BUTTON  : [device_id 1B][button_id 1B][state 1B]
+            button_id=0/state=0 -> 单击 (录像切换 / 拍照)
+  RC_VER  : [maj 1B][min 1B][rev 1B][build 1B] 固件版本
+
+支持的出向命令 (Host -> Wand) -- 见 protocol_config.h kCmdTx*:
+  RecordStart / RecordStop / Mark / Button / SetMode
 """
 
 from PySide6.QtCore import QObject, Signal, Slot
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 import asyncio
+import struct
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-# CyberWand BLE 服务 UUIDs
-CYBERWAND_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb"
-CYBERWAND_CHAR_WRITE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb"
-CYBERWAND_CHAR_NOTIFY_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
-CYBERWAND_CHAR_BATTERY_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
+# =============================================================================
+# BLE UUID 常量 (与固件 protocol_config.h 严格对齐)
+# =============================================================================
+
+# BTCTRL 自定义服务 (0xFFE0/0xFFE1/0xFFE2)
+CYBERWAND_SERVICE_UUID  = "0000ffe0-0000-1000-8000-00805f9b34fb"
+CYBERWAND_WRITE_UUID    = "0000ffe1-0000-1000-8000-00805f9b34fb"  # Host -> Wand
+CYBERWAND_NOTIFY_UUID   = "0000ffe2-0000-1000-8000-00805f9b34fb"  # Wand -> Host (NOTIFY)
+
+# 标准 GATT Battery Service
+BATTERY_SERVICE_UUID   = "0000180f-0000-1000-8000-00805f9b34fb"
+BATTERY_LEVEL_UUID     = "00002a19-0000-1000-8000-00805f9b34fb"
+
+# 固件协议帧头
+FRAME_HEAD_OUTBOUND = bytes([0xAA, 0xBB, 0xCC])   # Host -> Wand
+FRAME_HEAD_INBOUND  = bytes([0xCC, 0xBB, 0xAA])   # Wand -> Host
+FRAME_END_BIT       = 0x80
+
+# 命令字 (出向 Host -> Wand)
+CMD_TX_RECORD_START   = 0x23
+CMD_TX_RECORD_STOP    = 0x24
+CMD_TX_MARK           = 0x25
+CMD_TX_SET_MODE       = 0x21
+CMD_TX_BUTTON         = 0x10
+CMD_TX_RC_VERSION     = 0x11
+
+# 命令字 (入向 Wand -> Host)
+CMD_RX_PEER_TOKEN     = 0x01
+CMD_RX_SHUTDOWN       = 0x02
+CMD_RX_DISCONNECT     = 0x03
+CMD_RX_BATTERY_VALUE  = 0x50
+CMD_RX_CAMERA_MODE    = 0x52
+
+
+def build_frame(cmd: int, payload: bytes = b'') -> bytes:
+    """
+    组装出向帧: [HEAD 3B][CMD 1B][END|SN 1B][SIZE 1B][DATA]
+    单帧: END_BIT=0x80, SN=0, 即 END|SN = 0x80
+    """
+    sn_end = FRAME_END_BIT  # 单帧模式
+    size = len(payload)
+    frame = FRAME_HEAD_OUTBOUND + bytes([cmd, sn_end, size]) + payload
+    return frame
+
+
+def parse_frame(data: bytes):
+    """
+    解析入向帧. 返回 (cmd, payload_bytes) 或 (None, None) 表示解析失败.
+    帧结构: [HEAD 3B][CMD 1B][END|SN 1B][SIZE 1B][DATA SIZE B]
+    """
+    if len(data) < 6:
+        return None, None
+    if data[:3] != FRAME_HEAD_INBOUND:
+        logger.debug(f"parse_frame: bad HEAD {data[:3].hex()}")
+        return None, None
+    cmd  = data[3]
+    size = data[5]
+    if len(data) < 6 + size:
+        logger.debug(f"parse_frame: truncated, need {6+size}, got {len(data)}")
+        return None, None
+    payload = data[6:6 + size]
+    return cmd, payload
 
 
 class BLEConnector(QObject):
-    """BLE 连接器"""
+    """BLE 连接器 (BTCTRL 协议)"""
     
     # 信号定义
-    device_found = Signal(dict)  # 设备发现信号：{name, address, rssi}
-    connected = Signal(dict)     # 连接成功信号：{name, address}
-    disconnected = Signal()      # 断开连接信号
-    data_received = Signal(bytes)  # 数据接收信号
-    battery_updated = Signal(int)  # 电量更新信号
+    device_found = Signal(dict)    # 设备发现信号：{name, address, rssi}
+    connected = Signal(dict)       # 连接成功信号：{name, address}
+    disconnected = Signal()        # 断开连接信号
+    data_received = Signal(bytes)  # 原始数据接收信号 (已解帧 payload)
+    battery_updated = Signal(int)  # 电量更新信号 (0-100)
+    gesture_received = Signal(int) # 手势按键信号: button_id (0=Button1 单击)
     error_occurred = Signal(str)   # 错误信号
     
     def __init__(self):
@@ -37,19 +117,22 @@ class BLEConnector(QObject):
     
     @Slot(float)
     async def scan(self, timeout=5.0):
-        """扫描设备"""
+        """扫描设备 (自动过滤 CyberWand)"""
         logger.info(f"开始扫描 BLE 设备，超时：{timeout}秒")
-        
+
         def callback(device, advertisement_data):
             """设备发现回调"""
-            device_info = {
-                'name': device.name or 'Unknown',
-                'address': device.address,
-                'rssi': advertisement_data.rssi
-            }
-            logger.debug(f"发现设备：{device_info}")
-            self.device_found.emit(device_info)
-        
+            name = device.name or ''
+            # 只上报 CyberWand 相关设备, 避免列表过长
+            if 'CyberWand' in name:
+                device_info = {
+                    'name': name or 'Unknown',
+                    'address': device.address,
+                    'rssi': advertisement_data.rssi
+                }
+                logger.debug(f"发现目标设备：{device_info}")
+                self.device_found.emit(device_info)
+
         try:
             await BleakScanner.discover(timeout=timeout, callback=callback)
             logger.info("扫描完成")
@@ -59,28 +142,28 @@ class BLEConnector(QObject):
     
     @Slot(str)
     async def connect(self, address):
-        """连接设备"""
+        """连接设备 (BTCTRL 协议)"""
         logger.info(f"尝试连接设备：{address}")
-        
+
         try:
-            self.client = BleakClient(address)
+            self.client = BleakClient(address, disconnected_callback=self._on_disconnect_cb)
             await self.client.connect()
             self.is_connected = True
             self.current_address = address
-            
+
             device_info = {
-                'name': self.client.device.name or 'CyberWand',
+                'name': (self.client.device.name if self.client.device else None) or 'CyberWand',
                 'address': address
             }
             logger.info(f"连接成功：{device_info}")
             self.connected.emit(device_info)
-            
-            # 启动通知监听
+
+            # 启动 Notify 通知监听
             await self.start_notifications()
-            
-            # 读取电量
+
+            # 读取标准 Battery Level
             await self.read_battery_level()
-            
+
         except BleakError as e:
             logger.error(f"连接失败：{e}")
             self.error_occurred.emit(f"连接失败：{str(e)}")
@@ -88,6 +171,13 @@ class BLEConnector(QObject):
             logger.error(f"未知错误：{e}")
             self.error_occurred.emit(f"未知错误：{str(e)}")
     
+    def _on_disconnect_cb(self, client):
+        """Bleak 断开回调 (在 asyncio 线程调用)"""
+        logger.info("BLE 连接已断开 (bleak callback)")
+        self.is_connected = False
+        self.current_address = None
+        self.disconnected.emit()
+
     @Slot()
     async def disconnect(self):
         """断开连接"""
@@ -102,15 +192,15 @@ class BLEConnector(QObject):
             except Exception as e:
                 logger.error(f"断开连接失败：{e}")
                 self.error_occurred.emit(f"断开连接失败：{str(e)}")
-    
+
     async def start_notifications(self):
         """启动通知监听"""
         if not self.client or not self.is_connected:
             return
-        
+
         try:
             await self.client.start_notify(
-                CYBERWAND_CHAR_NOTIFY_UUID,
+                CYBERWAND_NOTIFY_UUID,
                 self.notification_handler
             )
             logger.info("已启动通知监听")
@@ -170,9 +260,9 @@ class BLEConnector(QObject):
         """读取电量"""
         if not self.client or not self.is_connected:
             return
-        
+
         try:
-            battery_data = await self.client.read_gatt_char(CYBERWAND_CHAR_BATTERY_UUID)
+            battery_data = await self.client.read_gatt_char(BATTERY_LEVEL_UUID)
             if battery_data:
                 battery_level = battery_data[0]
                 self.battery_updated.emit(battery_level)
@@ -185,13 +275,13 @@ class BLEConnector(QObject):
         if not self.client or not self.is_connected:
             logger.warning("设备未连接，无法发送命令")
             return
-        
+
         try:
             if isinstance(command, str):
                 command = command.encode('utf-8')
-            
+
             await self.client.write_gatt_char(
-                CYBERWAND_CHAR_WRITE_UUID,
+                CYBERWAND_WRITE_UUID,
                 command
             )
             logger.debug(f"发送命令：{command.hex()}")

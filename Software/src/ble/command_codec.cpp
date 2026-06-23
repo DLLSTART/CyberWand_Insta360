@@ -54,50 +54,59 @@ size_t CommandCodec::BuildButtonFrame(uint8_t device_id,
         cfg::kCmdTxButton, payload, sizeof(payload), out, cap);
 }
 
+size_t CommandCodec::BuildRcVersionFrame(uint8_t* out, size_t cap) {
+    // 4 字节版本号 [major, minor, revision, build]; 占位填 1.0.0.0.
+    // Peer expects a valid RC_VERSION frame to complete protocol handshake.
+    static const uint8_t kRcVersionPayload[4] = {0x01, 0x00, 0x00, 0x00};
+    return RemoteFrame::EncodeOutboundFrame(
+        cfg::kCmdTxRcVersion, kRcVersionPayload, sizeof(kRcVersionPayload),
+        out, cap);
+}
+
 // -----------------------------------------------------------------------------
-// 唤醒广播 manufacturer-data 字节流
+// QC 广播 manufacturer-data 字节流
 // -----------------------------------------------------------------------------
 
-size_t CommandCodec::WakeupAdvManufacturerDataLength() {
-    return static_cast<size_t>(cfg::kWakeupAdvPrefixLen)
-         + cfg::kWakeupTokenLen
-         + cfg::kWakeupAdvSuffixLen;
+size_t CommandCodec::QcAdvManufacturerDataLength() {
+    return static_cast<size_t>(cfg::kQcAdvPrefixLen)
+         + cfg::kQcTokenLen
+         + cfg::kQcAdvSuffixLen;
 }
 
 /**
- * 组装唤醒广播包.
+ * 组装 QC (Quick Capture) 广播包.
  *
  * 流程:
  *   1) 入参合法性: token 与 out 不可为空
  *   2) 容量校验: cap 必须 >= prefix + 6 + suffix
  *   3) 顺序拷贝三段:
- *      - cfg::kWakeupAdvPrefix (固定 N 字节)
- *      - token                 (固定 6 字节)
- *      - cfg::kWakeupAdvSuffix (固定 M 字节)
+ *      - cfg::kQcAdvPrefix (固定 N 字节)
+ *      - token             (固定 6 字节)
+ *      - cfg::kQcAdvSuffix (固定 M 字节)
  *   4) 返回总写入字节数
  *
  * 任何一步失败均返回 0; 成功时 out 内容完整.
  */
-size_t CommandCodec::BuildWakeupAdvManufacturerData(const uint8_t token[6],
-                                                    uint8_t* out,
-                                                    size_t cap) {
+size_t CommandCodec::BuildQcAdvManufacturerData(const uint8_t token[6],
+                                                uint8_t* out,
+                                                size_t cap) {
     if (token == nullptr || out == nullptr) {
         return 0;
     }
-    const size_t total = WakeupAdvManufacturerDataLength();
+    const size_t total = QcAdvManufacturerDataLength();
     if (cap < total) {
         return 0;
     }
 
     size_t off = 0;
-    memcpy(out + off, cfg::kWakeupAdvPrefix, cfg::kWakeupAdvPrefixLen);
-    off += cfg::kWakeupAdvPrefixLen;
+    memcpy(out + off, cfg::kQcAdvPrefix, cfg::kQcAdvPrefixLen);
+    off += cfg::kQcAdvPrefixLen;
 
-    memcpy(out + off, token, cfg::kWakeupTokenLen);
-    off += cfg::kWakeupTokenLen;
+    memcpy(out + off, token, cfg::kQcTokenLen);
+    off += cfg::kQcTokenLen;
 
-    memcpy(out + off, cfg::kWakeupAdvSuffix, cfg::kWakeupAdvSuffixLen);
-    off += cfg::kWakeupAdvSuffixLen;
+    memcpy(out + off, cfg::kQcAdvSuffix, cfg::kQcAdvSuffixLen);
+    off += cfg::kQcAdvSuffixLen;
 
     return off;
 }

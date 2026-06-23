@@ -14,6 +14,7 @@ private:
         Idle,
         Pressed,
         WaitForDoubleClick,
+        WaitForTripleClick,
         WaitForRelease
     };
 
@@ -25,6 +26,7 @@ private:
         uint32_t press_time;
         uint32_t release_time;
         bool is_press_emitted;
+        uint8_t click_count;  // 当前正在判定的连击计数: 1=单击, 2=双击中, 3=三击中
 
         ButtonContext(gpio_num_t p, ButtonType t, bool level);
     };
@@ -35,6 +37,7 @@ private:
     static const uint32_t debounce_ms = 20;
     static const uint32_t long_press_ms = 1000;
     static const uint32_t double_click_ms = 250;
+    static const uint32_t triple_click_ms = 250;
 
     ButtonManager();
     ~ButtonManager();

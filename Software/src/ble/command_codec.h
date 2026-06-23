@@ -6,9 +6,9 @@ namespace cw {
 namespace ble {
 
 // =============================================================================
-// 业务命令 / 唤醒广播 字节流编码器 (CommandCodec)
+// 业务命令 / QC 广播 字节流编码器 (CommandCodec)
 // -----------------------------------------------------------------------------
-// 把 "魔杖业务侧动作 (开始录像 / 切模式 / 打高光 / 按键 / 唤醒广播)"
+// 把 "魔杖业务侧动作 (开始录像 / 切模式 / 打高光 / 按键 / QC 广播)"
 // 翻译成 "符合协议规范的字节流" 的纯函数库.
 //
 // 设计动机:
@@ -17,14 +17,14 @@ namespace ble {
 //      具体字节布局完全交给本模块.
 //   2) 字节流拼装是 "纯逻辑", 不依赖 BLE 库, 因此可以在 *本地 Linux* 上
 //      用单元测试覆盖 (Software/test/), 而不需要 ESP32 / NimBLE 工具链.
-//   3) 协议规范的契约 (命令字 = cfg::kCmdTxXxx / 唤醒广播 = prefix+token+suffix
+//   3) 协议规范的契约 (命令字 = cfg::kCmdTxXxx / QC 广播 = prefix+token+suffix
 //      / 模式循环 = kModeSwitchSeq) 在测试代码中作为断言点反复出现, 一旦
 //      某次提交不小心改坏了 BleRemote::SendXxx 的命令字或字节顺序, 测试
 //      立即失败.
 //
-// 不感知任何具体协议字段取值: 所有具体值 (kCmdTx* / kWakeupAdvPrefix 等)
+// 不感知任何具体协议字段取值: 所有具体值 (kCmdTx* / kQcAdvPrefix 等)
 // 都来自 protocol_config.h (由 protocol.json 构建期生成), 本头文件只在函数
-// 名上反映业务语义 (RecordStart / SetMode / Mark / Button / WakeupAdv).
+// 名上反映业务语义 (RecordStart / SetMode / Mark / Button / QcAdv).
 // =============================================================================
 
 class CommandCodec {
@@ -59,27 +59,31 @@ public:
                                    uint8_t* out,
                                    size_t cap);
 
-    // ===== 唤醒广播 manufacturer-data 字节流 =====
+    /// 上报遥控器固件版本: cmd = cfg::kCmdTxRcVersion, payload = [maj, min, rev, build] (4B).
+    /// 在收到相机的 WAKEUP_SN (0x07) 之后回复, 让相机知道协议层握手完成.
+    static size_t BuildRcVersionFrame(uint8_t* out, size_t cap);
+
+    // ===== QC 广播 manufacturer-data 字节流 =====
 
     /**
-     * @brief  组装唤醒广播包的 manufacturer-data 字节流.
+     * @brief  组装 QC (Quick Capture) 广播包的 manufacturer-data 字节流.
      *
      * 字节布局 (与协议描述符一致):
-     *   [prefix N B]  cfg::kWakeupAdvPrefix  (含 CompanyID + iBeacon header 等)
+     *   [prefix N B]  cfg::kQcAdvPrefix  (含 CompanyID + iBeacon header 等)
      *   [token  6 B]  最近一次配对对端的 SN
-     *   [suffix M B]  cfg::kWakeupAdvSuffix  (Major / Minor / TxPower 等)
+     *   [suffix M B]  cfg::kQcAdvSuffix  (Major / Minor / TxPower 等)
      *
      * @param  token  最近一次配对对端的 6 字节 SN, 不可为 nullptr
      * @param  out    输出缓冲区, 不可为 nullptr
      * @param  cap    out 容量, 必须 >= prefix_len + 6 + suffix_len
      * @return 写入字节数 (= prefix_len + 6 + suffix_len), 失败返回 0
      */
-    static size_t BuildWakeupAdvManufacturerData(const uint8_t token[6],
-                                                 uint8_t* out,
-                                                 size_t cap);
+    static size_t BuildQcAdvManufacturerData(const uint8_t token[6],
+                                             uint8_t* out,
+                                             size_t cap);
 
-    /// 唤醒广播 manufacturer-data 总长度 (常量, 等于 prefix + 6 + suffix)
-    static size_t WakeupAdvManufacturerDataLength();
+    /// QC 广播 manufacturer-data 总长度 (常量, 等于 prefix + 6 + suffix)
+    static size_t QcAdvManufacturerDataLength();
 };
 
 // =============================================================================

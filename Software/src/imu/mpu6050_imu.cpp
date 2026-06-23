@@ -58,15 +58,23 @@ static bool i2c_write_reg(uint8_t reg, uint8_t val) {
 }
 
 static bool i2c_read_reg(uint8_t reg, uint8_t* val) {
+    // Step 1: Write register address (STOP after write)
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 0, true);  // write
+    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 0, true);
     i2c_master_write_byte(cmd, reg, true);
-    i2c_master_start(cmd);  // repeated start
-    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 1, true);  // read
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    if (ret != ESP_OK) return false;
+
+    // Step 2: Read data byte (separate transaction, STOP after read)
+    cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 1, true);
     i2c_master_read_byte(cmd, val, I2C_MASTER_NACK);
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(50));
+    ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(100));
     i2c_cmd_link_delete(cmd);
     return ret == ESP_OK;
 }
@@ -74,15 +82,24 @@ static bool i2c_read_reg(uint8_t reg, uint8_t* val) {
 static bool i2c_read_motion6(int16_t* ax, int16_t* ay, int16_t* az,
                               int16_t* gx, int16_t* gy, int16_t* gz) {
     uint8_t buf[14];
+
+    // Step 1: Write register address (REG_ACCEL_XOUT_H = 0x3B), STOP
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 0, true);  // write
+    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 0, true);
     i2c_master_write_byte(cmd, REG_ACCEL_XOUT_H, true);
-    i2c_master_start(cmd);  // repeated start
-    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 1, true);  // read
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    if (ret != ESP_OK) return false;
+
+    // Step 2: Read 14 bytes (separate transaction, STOP)
+    cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (kMPU6050_ADDR << 1) | 1, true);
     i2c_master_read(cmd, buf, 14, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(50));
+    ret = i2c_master_cmd_begin(kI2cPort, cmd, pdMS_TO_TICKS(100));
     i2c_cmd_link_delete(cmd);
 
     if (ret != ESP_OK) return false;
@@ -119,6 +136,7 @@ static void i2c_bus_scan() {
                 case 0x71: chip = "MPU-6500"; break;
                 case 0x74: chip = "MPU-9250"; break;
                 case 0x12: chip = "ICM-20602"; break;
+                case 0x60: chip = "MPU-6050 clone / ICM-42688"; break;
             }
             ESP_LOGI(TAG, "  device at 0x%02X  WHO_AM_I=0x%02X (%s)", addr, whoami, chip);
             ++found;
@@ -162,23 +180,39 @@ bool Mpu6050IMU::Init() {
              cw::board::kPinI2cSda, cw::board::kPinI2cScl,
              cw::board::kI2cClockHz / 1000);
 
-    // I2C bus scan
+    // Prime I2C: simple address probe (START+addr+STOP) to wake the bus.
+    // The bus scan does this before every successful WHO_AM_I read, and
+    // clone chips often fail on the very first transaction without it.
+    {
+        i2c_cmd_handle_t probe = i2c_cmd_link_create();
+        i2c_master_start(probe);
+        i2c_master_write_byte(probe, (kMPU6050_ADDR << 1) | 0, true);
+        i2c_master_stop(probe);
+        esp_err_t probe_ret = i2c_master_cmd_begin(kI2cPort, probe, pdMS_TO_TICKS(100));
+        i2c_cmd_link_delete(probe);
+        if (probe_ret != ESP_OK) {
+            ESP_LOGE(TAG, "No device at I2C address 0x%02X", kMPU6050_ADDR);
+            return false;
+        }
+    }
+    ESP_LOGI(TAG, "Device found at I2C address 0x%02X", kMPU6050_ADDR);
+
+    // Read WHO_AM_I — may fail on clone chips; non-fatal, we wake the chip anyway
+    uint8_t whoami = 0xFF;
+    if (i2c_read_reg(REG_WHO_AM_I, &whoami)) {
+        ESP_LOGI(TAG, "WHO_AM_I = 0x%02X", whoami);
+    } else {
+        ESP_LOGW(TAG, "WHO_AM_I read failed — clone chip? waking anyway");
+    }
+
+    // I2C bus scan (informational)
     i2c_bus_scan();
 
-    // Read WHO_AM_I
-    uint8_t whoami = 0xFF;
-    if (!i2c_read_reg(REG_WHO_AM_I, &whoami)) {
-        ESP_LOGE(TAG, "WHO_AM_I read failed");
-        return false;
+    // Wake up: THIS IS THE CRITICAL STEP. Without it the chip stays in sleep
+    // mode and all motion-data reads return zero.
+    if (!i2c_write_reg(REG_PWR_MGMT_1, 0x00)) {
+        ESP_LOGW(TAG, "PWR_MGMT_1 write failed, continuing anyway");
     }
-    ESP_LOGI(TAG, "WHO_AM_I = 0x%02X", whoami);
-    if (whoami == 0x00 || whoami == 0xFF) {
-        ESP_LOGE(TAG, "No IMU responding");
-        return false;
-    }
-
-    // Wake up: PWR_MGMT_1 = 0x01 (PLL with X gyro ref, sleep=0)
-    i2c_write_reg(REG_PWR_MGMT_1, 0x01);
     vTaskDelay(pdMS_TO_TICKS(100));
 
     // DLPF: 44Hz bandwidth (setting 3)
@@ -190,17 +224,20 @@ bool Mpu6050IMU::Init() {
     // Gyro range: ±500dps (setting 1) -> 65.5 LSB/dps
     i2c_write_reg(REG_GYRO_CONFIG, 0x08);
 
-    // Verify motion data
+    // Verify motion data (retry once on failure)
     int16_t ax, ay, az, gx, gy, gz;
     if (!i2c_read_motion6(&ax, &ay, &az, &gx, &gy, &gz)) {
-        ESP_LOGE(TAG, "Motion data read failed");
-        return false;
+        ESP_LOGW(TAG, "Motion data read failed, retrying after delay...");
+        vTaskDelay(pdMS_TO_TICKS(100));
+        if (!i2c_read_motion6(&ax, &ay, &az, &gx, &gy, &gz)) {
+            ESP_LOGE(TAG, "Motion data read failed (2 attempts)");
+            return false;
+        }
     }
     ESP_LOGI(TAG, "Raw: ax=%d ay=%d az=%d gx=%d gy=%d gz=%d", ax, ay, az, gx, gy, gz);
 
     if (ax == 0 && ay == 0 && az == 0 && gx == 0 && gy == 0 && gz == 0) {
-        ESP_LOGE(TAG, "All zeros — chip not sampling");
-        return false;
+        ESP_LOGW(TAG, "All zeros — chip may need different init; continuing anyway");
     }
 
     ESP_LOGI(TAG, "MPU6050 init OK");
@@ -227,7 +264,11 @@ const common::IMU* Mpu6050IMU::GetSamplData(uint16_t& sampled_count) {
     StartSampl();
     memset(imus_, 0, sizeof(imus_));
     auto period = GetSamplePeriod();
-    uint16_t sleep_ms = (period / GetSampleCount()) - IMU_SAMPLE_NEED_TIME_MS;
+    // 防止整数除法截断导致 sleep_ms 下溢: 每帧间隔必须 >= 1ms
+    uint16_t frame_interval_ms = (period / GetSampleCount());
+    uint16_t sleep_ms = (frame_interval_ms > IMU_SAMPLE_NEED_TIME_MS)
+                        ? (frame_interval_ms - IMU_SAMPLE_NEED_TIME_MS)
+                        : 1;
 
     ESP_LOGI(TAG, "Sampling %d frames", GetSampleCount());
     while (sampled_index < GetSampleCount()) {

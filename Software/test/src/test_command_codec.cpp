@@ -11,11 +11,11 @@
 //   5. BuildButtonFrame(d,b,s) -> 字节流 [3] == cfg::kCmdTxButton
 //                                 字节流 [SIZE] == 3, payload == [d,b,s]
 //
-//   6. BuildWakeupAdvManufacturerData(token):
-//      - 总长 == kWakeupAdvPrefixLen + 6 + kWakeupAdvSuffixLen
-//      - [0..prefix_len)         == cfg::kWakeupAdvPrefix (字节级一致)
+//   6. BuildQcAdvManufacturerData(token):
+//      - 总长 == kQcAdvPrefixLen + 6 + kQcAdvSuffixLen
+//      - [0..prefix_len)         == cfg::kQcAdvPrefix (字节级一致)
 //      - [prefix_len..+6)        == 入参 token
-//      - [prefix_len+6..end)     == cfg::kWakeupAdvSuffix
+//      - [prefix_len+6..end)     == cfg::kQcAdvSuffix
 //      - cap 不足 / 入参为 null  -> 返回 0
 //
 //   7. ModeRotator:
@@ -103,6 +103,17 @@ MT_TEST(CommandCodec, BuildButtonFramePayloadIsThreeFieldsInOrder) {
                           cfg::kCmdTxButton, pl, 3);
 }
 
+MT_TEST(CommandCodec, BuildRcVersionFrameMatchesProtocol) {
+    // 4 字节 payload, cmd 必须等于 cfg::kCmdTxRcVersion (相机协议 0x84).
+    uint8_t buf[32] = {0};
+    size_t n = CommandCodec::BuildRcVersionFrame(buf, sizeof(buf));
+    MT_REQUIRE_TRUE(n == static_cast<size_t>(cfg::kFrameHeadLen) + 4);
+    MT_EXPECT_BYTES_EQ(buf, cfg::kFrameHeadOutbound, 3);
+    MT_EXPECT_EQ((int)buf[3], (int)cfg::kCmdTxRcVersion);
+    MT_EXPECT_TRUE((buf[4] & cfg::kFrameEndBit) != 0);
+    MT_EXPECT_EQ((int)buf[5], 4);
+}
+
 // -----------------------------------------------------------------------------
 // 业务命令拒绝异常入参
 // -----------------------------------------------------------------------------
@@ -122,67 +133,67 @@ MT_TEST(CommandCodec, AllBuildersRejectInsufficientCapacity) {
 }
 
 // -----------------------------------------------------------------------------
-// 唤醒广播 manufacturer-data 字节布局: prefix + token + suffix
+// QC 广播 manufacturer-data 字节布局: prefix + token + suffix
 // -----------------------------------------------------------------------------
-MT_TEST(CommandCodec, WakeupAdvLengthMatchesConfig) {
-    size_t expect = static_cast<size_t>(cfg::kWakeupAdvPrefixLen)
-                  + cfg::kWakeupTokenLen
-                  + cfg::kWakeupAdvSuffixLen;
-    MT_EXPECT_EQ((long long)CommandCodec::WakeupAdvManufacturerDataLength(),
+MT_TEST(CommandCodec, QcAdvLengthMatchesConfig) {
+    size_t expect = static_cast<size_t>(cfg::kQcAdvPrefixLen)
+                  + cfg::kQcTokenLen
+                  + cfg::kQcAdvSuffixLen;
+    MT_EXPECT_EQ((long long)CommandCodec::QcAdvManufacturerDataLength(),
                  (long long)expect);
 }
 
-MT_TEST(CommandCodec, BuildWakeupAdvLayoutMatchesProtocol) {
+MT_TEST(CommandCodec, BuildQcAdvLayoutMatchesProtocol) {
     uint8_t token[6]  = {'A','B','C','D','E','F'};
     uint8_t out[64]   = {0};
-    size_t n = CommandCodec::BuildWakeupAdvManufacturerData(token, out, sizeof(out));
-    MT_REQUIRE_TRUE(n == CommandCodec::WakeupAdvManufacturerDataLength());
+    size_t n = CommandCodec::BuildQcAdvManufacturerData(token, out, sizeof(out));
+    MT_REQUIRE_TRUE(n == CommandCodec::QcAdvManufacturerDataLength());
 
-    // 段 1: 前 prefix_len 字节必须 *字节级* 等于 cfg::kWakeupAdvPrefix
+    // 段 1: 前 prefix_len 字节必须 *字节级* 等于 cfg::kQcAdvPrefix
     MT_EXPECT_BYTES_EQ(out,
-                       cfg::kWakeupAdvPrefix,
-                       cfg::kWakeupAdvPrefixLen);
+                       cfg::kQcAdvPrefix,
+                       cfg::kQcAdvPrefixLen);
     // 段 2: 接下来 6 字节必须等于入参 token
-    MT_EXPECT_BYTES_EQ(out + cfg::kWakeupAdvPrefixLen,
+    MT_EXPECT_BYTES_EQ(out + cfg::kQcAdvPrefixLen,
                        token,
-                       cfg::kWakeupTokenLen);
-    // 段 3: 末尾 suffix_len 字节必须 *字节级* 等于 cfg::kWakeupAdvSuffix
-    MT_EXPECT_BYTES_EQ(out + cfg::kWakeupAdvPrefixLen + cfg::kWakeupTokenLen,
-                       cfg::kWakeupAdvSuffix,
-                       cfg::kWakeupAdvSuffixLen);
+                       cfg::kQcTokenLen);
+    // 段 3: 末尾 suffix_len 字节必须 *字节级* 等于 cfg::kQcAdvSuffix
+    MT_EXPECT_BYTES_EQ(out + cfg::kQcAdvPrefixLen + cfg::kQcTokenLen,
+                       cfg::kQcAdvSuffix,
+                       cfg::kQcAdvSuffixLen);
 }
 
-MT_TEST(CommandCodec, BuildWakeupAdvDifferentTokenChangesOnlyTokenSegment) {
+MT_TEST(CommandCodec, BuildQcAdvDifferentTokenChangesOnlyTokenSegment) {
     uint8_t token1[6] = {0x11,0x22,0x33,0x44,0x55,0x66};
     uint8_t token2[6] = {0xAA,0xBB,0xCC,0xDD,0xEE,0xFF};
     uint8_t out1[64]  = {0};
     uint8_t out2[64]  = {0};
-    size_t n1 = CommandCodec::BuildWakeupAdvManufacturerData(token1, out1, sizeof(out1));
-    size_t n2 = CommandCodec::BuildWakeupAdvManufacturerData(token2, out2, sizeof(out2));
+    size_t n1 = CommandCodec::BuildQcAdvManufacturerData(token1, out1, sizeof(out1));
+    size_t n2 = CommandCodec::BuildQcAdvManufacturerData(token2, out2, sizeof(out2));
     MT_REQUIRE_TRUE(n1 == n2);
 
     // prefix 段必须不变
-    MT_EXPECT_BYTES_EQ(out1, out2, cfg::kWakeupAdvPrefixLen);
+    MT_EXPECT_BYTES_EQ(out1, out2, cfg::kQcAdvPrefixLen);
     // suffix 段必须不变
-    MT_EXPECT_BYTES_EQ(out1 + cfg::kWakeupAdvPrefixLen + cfg::kWakeupTokenLen,
-                       out2 + cfg::kWakeupAdvPrefixLen + cfg::kWakeupTokenLen,
-                       cfg::kWakeupAdvSuffixLen);
+    MT_EXPECT_BYTES_EQ(out1 + cfg::kQcAdvPrefixLen + cfg::kQcTokenLen,
+                       out2 + cfg::kQcAdvPrefixLen + cfg::kQcTokenLen,
+                       cfg::kQcAdvSuffixLen);
     // token 段必须分别等于各自的入参
-    MT_EXPECT_BYTES_EQ(out1 + cfg::kWakeupAdvPrefixLen, token1, 6);
-    MT_EXPECT_BYTES_EQ(out2 + cfg::kWakeupAdvPrefixLen, token2, 6);
+    MT_EXPECT_BYTES_EQ(out1 + cfg::kQcAdvPrefixLen, token1, 6);
+    MT_EXPECT_BYTES_EQ(out2 + cfg::kQcAdvPrefixLen, token2, 6);
 }
 
-MT_TEST(CommandCodec, BuildWakeupAdvRejectsNullInputs) {
+MT_TEST(CommandCodec, BuildQcAdvRejectsNullInputs) {
     uint8_t token[6] = {1,2,3,4,5,6};
     uint8_t buf[64]  = {0};
-    MT_EXPECT_EQ((int)CommandCodec::BuildWakeupAdvManufacturerData(nullptr, buf,    sizeof(buf)), 0);
-    MT_EXPECT_EQ((int)CommandCodec::BuildWakeupAdvManufacturerData(token,   nullptr, sizeof(buf)), 0);
+    MT_EXPECT_EQ((int)CommandCodec::BuildQcAdvManufacturerData(nullptr, buf,    sizeof(buf)), 0);
+    MT_EXPECT_EQ((int)CommandCodec::BuildQcAdvManufacturerData(token,   nullptr, sizeof(buf)), 0);
 }
 
-MT_TEST(CommandCodec, BuildWakeupAdvRejectsInsufficientCapacity) {
+MT_TEST(CommandCodec, BuildQcAdvRejectsInsufficientCapacity) {
     uint8_t token[6] = {1,2,3,4,5,6};
     uint8_t buf[4]   = {0};  // 必然小于 prefix + 6 + suffix
-    MT_EXPECT_EQ((int)CommandCodec::BuildWakeupAdvManufacturerData(token, buf, sizeof(buf)), 0);
+    MT_EXPECT_EQ((int)CommandCodec::BuildQcAdvManufacturerData(token, buf, sizeof(buf)), 0);
 }
 
 // -----------------------------------------------------------------------------

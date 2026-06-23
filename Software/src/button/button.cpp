@@ -6,7 +6,7 @@ namespace cw::button {
 
 ButtonManager::ButtonContext::ButtonContext(gpio_num_t p, ButtonType t, bool level)
     : pin(p), type(t), active_level(level), state(ButtonState::Idle),
-      press_time(0), release_time(0), is_press_emitted(false) {}
+      press_time(0), release_time(0), is_press_emitted(false), click_count(0) {}
 
 ButtonManager::ButtonManager() {
     message_queue = xQueueCreate(10, sizeof(ButtonMessage));
@@ -45,6 +45,7 @@ void ButtonManager::RunTask() {
                     if (is_pressed) {
                         btn.press_time = now;
                         btn.is_press_emitted = false;
+                        btn.click_count = 1;
                         btn.state = ButtonState::Pressed;
                     }
                     break;
@@ -55,7 +56,9 @@ void ButtonManager::RunTask() {
                             SendEvent(btn.type, ButtonEvent::PressDown);
                             btn.is_press_emitted = true;
                         }
-                        if (now - btn.press_time >= long_press_ms) {
+                        // 长按只对第 1 次按下生效, 避免连击中途升级为长按
+                        if (btn.click_count == 1 &&
+                            now - btn.press_time >= long_press_ms) {
                             SendEvent(btn.type, ButtonEvent::LongPress);
                             btn.state = ButtonState::WaitForRelease;
                         }
@@ -63,9 +66,25 @@ void ButtonManager::RunTask() {
                         if (now - btn.press_time >= debounce_ms) {
                             btn.release_time = now;
                             SendEvent(btn.type, ButtonEvent::Release);
-                            btn.state = ButtonState::WaitForDoubleClick;
+
+                            // 第 N 次松手, 决定下一步等待还是直接派发
+                            if (btn.click_count == 2) {
+                                // 双击的"派发"边沿放在第 2 次按下时已经发过 DoubleClick
+                                // 这里只决定: 等第 3 击 or 收尾
+                                btn.state = ButtonState::WaitForTripleClick;
+                            } else if (btn.click_count == 3) {
+                                // 第 3 次松手 -> TripleClick (押后到松手, 让上层
+                                // 已经因 Release 退出阻塞操作)
+                                SendEvent(btn.type, ButtonEvent::TripleClick);
+                                btn.state = ButtonState::Idle;
+                                btn.click_count = 0;
+                            } else {
+                                // 单击候选: 等 double_click_ms 看是否升级成双击
+                                btn.state = ButtonState::WaitForDoubleClick;
+                            }
                         } else {
                             btn.state = ButtonState::Idle;
+                            btn.click_count = 0;
                         }
                     }
                     break;
@@ -73,14 +92,39 @@ void ButtonManager::RunTask() {
                 case ButtonState::WaitForDoubleClick:
                     if (is_pressed) {
                         if (now - btn.release_time <= double_click_ms) {
+                            // 第 2 次按下: 立即发 PressDown + DoubleClick
+                            // (兼容现有行为: 上层在收到 DoubleClick 时切到调试模式)
                             SendEvent(btn.type, ButtonEvent::PressDown);
                             SendEvent(btn.type, ButtonEvent::DoubleClick);
-                            btn.state = ButtonState::WaitForRelease;
+                            btn.press_time = now;
+                            btn.is_press_emitted = true;
+                            btn.click_count = 2;
+                            btn.state = ButtonState::Pressed;
                         }
                     } else {
                         if (now - btn.release_time > double_click_ms) {
                             SendEvent(btn.type, ButtonEvent::SingleClick);
                             btn.state = ButtonState::Idle;
+                            btn.click_count = 0;
+                        }
+                    }
+                    break;
+
+                case ButtonState::WaitForTripleClick:
+                    if (is_pressed) {
+                        if (now - btn.release_time <= triple_click_ms) {
+                            // 第 3 次按下: 只发 PressDown, TripleClick 等到松手再发
+                            SendEvent(btn.type, ButtonEvent::PressDown);
+                            btn.press_time = now;
+                            btn.is_press_emitted = true;
+                            btn.click_count = 3;
+                            btn.state = ButtonState::Pressed;
+                        }
+                    } else {
+                        if (now - btn.release_time > triple_click_ms) {
+                            // 没有第 3 击: DoubleClick 已经发过, 收尾
+                            btn.state = ButtonState::Idle;
+                            btn.click_count = 0;
                         }
                     }
                     break;
@@ -89,6 +133,7 @@ void ButtonManager::RunTask() {
                     if (!is_pressed) {
                         SendEvent(btn.type, ButtonEvent::Release);
                         btn.state = ButtonState::Idle;
+                        btn.click_count = 0;
                     }
                     break;
             }

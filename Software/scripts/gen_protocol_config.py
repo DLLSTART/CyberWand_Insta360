@@ -70,14 +70,14 @@ def render_protocol_header(cfg):
     """把解析后的 JSON dict 渲染为 C++ 头内容字符串.
 
     流程:
-      1) 取出 4 个顶层节: ble / frame / wakeup / modes
+      1) 取出 4 个顶层节: ble / frame / qc / modes
       2) 解析两个 3 字节帧头, 校验长度
       3) 解析 modes.switch_sequence, 不允许为空
       4) 逐段拼装 C++ 常量声明:
          - BLE GATT 参数 (GAP 名 / 3 个 UUID16 / MTU)
          - 帧布局 (头长 / max_data / END 位 / token payload 长 / 出向头 / 入向头)
          - 命令字 (按 _ 分隔的下划线名 -> CamelCase 拼成 kCmd 前缀)
-         - 唤醒广播 (rotate_period_ms / prefix[] / token_length / suffix[])
+         - QC 广播 (rotate_period_ms / prefix[] / token_length / suffix[])
          - 模式切换序列 (数组 + 长度)
       5) 返回完整 C++ 头文件字符串
 
@@ -85,7 +85,7 @@ def render_protocol_header(cfg):
     """
     ble    = cfg["ble"]
     frame  = cfg["frame"]
-    wakeup = cfg["wakeup"]
+    qc     = cfg["qc"]
     modes  = cfg["modes"]
 
     head_out = [parse_int(x) for x in frame["head_outbound"]]
@@ -152,31 +152,31 @@ def render_protocol_header(cfg):
                    .format(c_name, parse_int(value)))
     out.append("")
 
-    # ---- 唤醒广播 ----
+    # ---- QC 广播 ----
     # manufacturer-data 模板拆为 prefix / token / suffix 三段
-    mfr     = wakeup["manufacturer_data"]
+    mfr     = qc["manufacturer_data"]
     prefix  = [parse_int(x) for x in mfr["prefix"]]
     suffix  = [parse_int(x) for x in mfr["suffix"]]
     tok_len = parse_int(mfr["token_length"])
-    rot_ms  = parse_int(wakeup["rotate_period_ms"])
+    rot_ms  = parse_int(qc["rotate_period_ms"])
     if not prefix:
-        raise ValueError("wakeup.manufacturer_data.prefix must not be empty")
+        raise ValueError("qc.manufacturer_data.prefix must not be empty")
     if rot_ms <= 0:
-        raise ValueError("wakeup.rotate_period_ms must be > 0")
+        raise ValueError("qc.rotate_period_ms must be > 0")
 
-    out.append("// ===== Wakeup advertisement =====")
-    out.append("// 已配对状态下与普通广播轮流交替, 每 kWakeupAdvRotatePeriodMs 切换一次")
-    out.append("constexpr uint32_t kWakeupAdvRotatePeriodMs = {};"
+    out.append("// ===== QC (Quick Capture) advertisement =====")
+    out.append("// 已配对状态下与普通广播轮流交替, 每 kQcAdvRotatePeriodMs 切换一次")
+    out.append("constexpr uint32_t kQcAdvRotatePeriodMs = {};"
                .format(rot_ms))
     out.append("// manufacturer-data 字节布局: [prefix N][token M][suffix P]")
     out.append("// prefix 已包含 CompanyID 2B (LE)")
-    out.append("constexpr uint8_t  kWakeupTokenLen      = {};".format(tok_len))
-    out.append("constexpr uint8_t  kWakeupAdvPrefix[]   = {{ {} }};"
+    out.append("constexpr uint8_t  kQcTokenLen      = {};".format(tok_len))
+    out.append("constexpr uint8_t  kQcAdvPrefix[]   = {{ {} }};"
                .format(", ".join("0x{:02X}".format(b) for b in prefix)))
-    out.append("constexpr uint8_t  kWakeupAdvPrefixLen  = {};".format(len(prefix)))
-    out.append("constexpr uint8_t  kWakeupAdvSuffix[]   = {{ {} }};"
+    out.append("constexpr uint8_t  kQcAdvPrefixLen  = {};".format(len(prefix)))
+    out.append("constexpr uint8_t  kQcAdvSuffix[]   = {{ {} }};"
                .format(", ".join("0x{:02X}".format(b) for b in suffix)))
-    out.append("constexpr uint8_t  kWakeupAdvSuffixLen  = {};".format(len(suffix)))
+    out.append("constexpr uint8_t  kQcAdvSuffixLen  = {};".format(len(suffix)))
     out.append("")
 
     # ---- 模式切换序列 ----

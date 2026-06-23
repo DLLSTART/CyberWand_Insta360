@@ -335,7 +335,7 @@ MPU6050 connection successful           ← 即便 IC 是 ICM 兼容, MPU6050 �
 - [ ] **松开按键** → 串口打印 `[main] capture done: NN frames` 或 `gesture too short, discarded` (n < 30)
 - [ ] **手势识别**: 挥圆圈 → `[app] action type: 0` 或 `1` (`kCircle_Cw / kCircle_Aw`); 挥勾 → `[app] action type: 2` (`kCheck`); 挥叉 → `[app] action type: 3` 或 `4`
 - [ ] **双击切模式**: 双击按键 → LED **蓝色快闪 2 秒** + 串口 `[main] mode -> Acquisition`; 再双击 → LED **绿色长亮 3 秒** + `[main] mode -> Application`
-- [ ] **BLE 广播**: 用手机 nRF Connect 扫描看到外设名 (开发期 `Insta360 GPS Remote` / 开源版 `CyberWand`)
+- [ ] **BLE 广播**: 用手机 nRF Connect 扫描看到外设名 (`CyberWand`)
 - [ ] **BLE 命令下发**: 连上相机后挥圆圈 → 串口 `[main] gesture circle -> cmd sent OK`
 - [ ] **R5 风险现场判定**:
       - 按下按键 (任意一次手势) → 立即看串口前几行

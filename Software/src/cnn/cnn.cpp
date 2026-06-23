@@ -53,15 +53,24 @@ bool ActionRecognitionCNN::RunModel() {
     uint8_t max_index = 0;
     int8_t max_value = output[0];
     for (uint8_t i = 0; i < static_cast<uint8_t>(ActionType::kMax); i++) {
-        // #if defined(CY_DEBUG)
-        ILOGT("output[%d] = %d\n", i, (output[i] / 127) * 100); // 输出值归一化为百分比显示
-        // #endif
+        // nnom softmax 输出为 int8_t，量化范围 [-128, 127]，对应概率 [0%, 100%]
+        // 转换公式: percent = (output[i] + 128) * 100 / 255
+        // 注意: output[i] 为负值时表示概率接近 0，需先加 128 再做比例换算
+        int pct = (((int)output[i] + 128) * 100) / 255;
+        ILOGT("output[%d] = %d (%d%%)", i, output[i], pct);
         if (output[i] > max_value) {
             max_value = output[i];
             max_index = i;
         }
     }
-    if (max_value > kThreshold) {
+    // kThreshold 含义: 期望置信度百分比阈值 (0-100)
+    // 需要将 int8_t 输出值转换回百分比后再比较
+    // max_value 对应 percent = (max_value + 128) * 100 / 255
+    // 反推: max_value > threshold_int8 <=> (max_value+128)*100/255 > kThreshold
+    // 等价: max_value > (kThreshold * 255 / 100) - 128
+    // 预计算: kThreshold=70 -> (70*255/100)-128 = 178-128 = 50
+    constexpr int8_t kThresholdInt8 = (int8_t)((kThreshold * 255 / 100) - 128);
+    if (max_value > kThresholdInt8) {
         action_type_ = static_cast<ActionType>(max_index);
     } else {
         action_type_ = ActionType::kUnknown;

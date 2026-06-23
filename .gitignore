@@ -45,6 +45,9 @@ Thumbs.db
 
 # 应用层协议描述符 (本地版本, 不入库)
 Software/config/protocol.json
+
+# 脱敏映射表 (含原始敏感值, 不入库)
+docs/DESENSITIZATION_MAP.md
 # 由 protocol.json 自动生成的 C++ 头, 不入库
 Software/include/protocol_config.h
 

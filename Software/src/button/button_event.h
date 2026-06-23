@@ -15,6 +15,7 @@ enum class ButtonEvent {
     Release,
     SingleClick,
     DoubleClick,
+    TripleClick,
     LongPress
 };
 

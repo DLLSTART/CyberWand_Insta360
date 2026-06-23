@@ -391,7 +391,7 @@ flowchart TD
 sequenceDiagram
     participant 用户
     participant CW as CyberWand
-    participant Cam as Insta360 相机
+    participant Cam as 相机
 
     用户->>CW: USB-C 通电 / 开 SW2
     CW->>CW: 加载 NVS 检查是否已配对

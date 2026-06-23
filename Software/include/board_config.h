@@ -46,6 +46,12 @@ constexpr uint16_t kLed1Count         = 1;
 // 开发板上接一个普通 LED (串联 220ohm 电阻) 到此 GPIO
 constexpr uint8_t kPinStatusLed       = 2;
 
+// --- 板载 RGB LED (ESP32-S3 DevKitC-1: WS2812B on GPIO48) ----------------
+// 单线 NeoPixel 协议, 用 RMT 外设驱动, 见 led.cpp.
+// 状态色:
+//   白 = 广播中未连接 / 蓝 = 已连接空闲 / 黄 = 手势录制 / 绿 = 手势识别
+constexpr uint8_t kPinRgbLed          = 48;
+
 // --- IMU (MPU6050, I2C) --------------------------------------------------
 //   SCL -> GPIO17, SDA -> GPIO18, INT -> GPIO16
 constexpr uint8_t kPinI2cSda          = 18;
