@@ -8,6 +8,11 @@
 #include "led.h"
 
 #include "ble_remote.h"
+#include "ble_ota.h"
+
+#if defined(FEATURE_GESTURE_RECORDING)
+#include "gesture_recorder.h"
+#endif
 
 // =============================================================================
 // 系统工作模式
@@ -30,8 +35,11 @@
 // 默认开机进入 Application, 用户开始使用前无需任何配置.
 // =============================================================================
 enum class SystemWorkMode {
-  Application,  // 应用模式: 手势识别 + 蓝牙控制
-  Acquisition   // 采集模式: 记录 IMU 原始数据用于训练
+  Application,       // 应用模式: 手势识别 + 蓝牙控制
+  Acquisition,       // 采集模式: 记录 IMU 原始数据用于训练
+#if defined(FEATURE_GESTURE_RECORDING)
+  GestureRecording   // 手势录制模式: DMP 四元数录制到 Flash
+#endif
 };
 static SystemWorkMode kWorkMode = SystemWorkMode::Application;
 
@@ -151,6 +159,18 @@ void system_init(void) {
   cw::led::LedManager::GetInstance().Begin();
 
   cw::ble::BleRemote::GetInstance().Init();
+
+  // BLE OTA: 注册 OTA Service 到同一个 BLE Server
+  cw::ble_ota::BleOta::GetInstance().Init(
+      cw::ble::BleRemote::GetInstance().GetServer());
+  // 若是 OTA 后首次启动, 确认新固件有效 (否则下次启动将回滚)
+  cw::ble_ota::BleOta::ConfirmIfPendingVerification();
+
+#if defined(FEATURE_GESTURE_RECORDING)
+  if (!cw::gesture::RecorderInit()) {
+    ILOGN("[main] gesture RecorderInit FAILED (SPIFFS or DMP)");
+  }
+#endif
 }
 
 
@@ -170,6 +190,27 @@ void setup() {
  *     当用户的二次按下被 button 状态机判定为 DoubleClick 时同步触发本函数.
  */
 void double_click_handler(void) {
+#if defined(FEATURE_GESTURE_RECORDING)
+  // 三态循环: Application -> GestureRecording -> Application
+  // (Acquisition 模式在 FEATURE_GESTURE_RECORDING 下被 GestureRecording 替代)
+  if (kWorkMode == SystemWorkMode::Application) {
+    kWorkMode = SystemWorkMode::GestureRecording;
+    // 紫色快闪 2s 提示进入手势录制模式
+    cw::led::LedManager::GetInstance().SetMode(
+        cw::led::LedType::Status, cw::led::LedMode::BlinkFast,
+        0xFF00FF, 2000,
+        cw::led::LedMode::Off);
+    ILOGT("[main] mode -> GestureRecording (%u/1000)\n",
+          cw::gesture::RecorderCount());
+  } else {
+    kWorkMode = SystemWorkMode::Application;
+    cw::led::LedManager::GetInstance().SetMode(
+        cw::led::LedType::Status, cw::led::LedMode::On,
+        cw::board::kLedColorReady, 3000,
+        cw::led::LedMode::Off);
+    ILOGN("[main] mode -> Application");
+  }
+#else
   if (kWorkMode == SystemWorkMode::Application) {
     kWorkMode = SystemWorkMode::Acquisition;
     // 切到 Acquisition: 蓝色快闪 2s 提示进入数据采集模式
@@ -187,6 +228,7 @@ void double_click_handler(void) {
         cw::led::LedMode::Off);
     ILOGN("[main] mode -> Application");
   }
+#endif
 }
 
 
@@ -384,7 +426,86 @@ static void recognize_and_dispatch(const cw::common::IMU* buf, uint16_t n) {
  *   - 单击 / 长按事件被彻底舍弃: 用户体验由 "按下 + 松开" 两个边沿完全描述
  *   - 两种模式的差异只在"采完之后做什么", 采样过程 (亮灯/计帧/停采) 完全一致
  */
+
+#if defined(FEATURE_GESTURE_RECORDING)
+/**
+ * GestureRecording 模式后处理: DMP 四元数录制并写入 SPIFFS.
+ *
+ * 流程:
+ *   1) RecorderStart() 启动 DMP
+ *   2) 循环采集四元数直到松开 / 达 kMaxFramesPerGesture 上限
+ *   3) RecorderCommit() 将数据追加到 /gestures.bin
+ */
+static void record_gesture_quaternion(void) {
+  using cw::button::ButtonEvent;
+  using cw::button::ButtonMessage;
+  using cw::button::ButtonType;
+  using cw::gesture::Quat;
+
+  auto& btn = cw::button::ButtonManager::GetInstance();
+  auto& led = cw::led::LedManager::GetInstance();
+
+  if (!cw::gesture::RecorderStart()) {
+    ILOGN("[main] RecorderStart failed");
+    return;
+  }
+
+  // 录制中: 紫色常亮
+  led.SetMode(cw::led::LedType::Status, cw::led::LedMode::On,
+              0xFF00FF, 0, cw::led::LedMode::On);
+
+  static Quat buf[cw::gesture::kMaxFramesPerGesture];
+  uint16_t n = 0;
+  ButtonMessage msg{};
+
+  while (n < cw::gesture::kMaxFramesPerGesture) {
+    if (cw::gesture::RecorderSampleOne(buf[n])) {
+      ++n;
+    }
+    // 0-poll 按键
+    if (btn.GetEvent(msg, 0)) {
+      if (msg.type == ButtonType::JoystickBtn) {
+        if (msg.event == ButtonEvent::Release) break;
+        if (msg.event == ButtonEvent::DoubleClick) {
+          // 录制中双击 = 切模式, 丢弃本次数据
+          led.SetMode(cw::led::LedType::Status, cw::led::LedMode::Off, 0,
+                      cw::led::LedMode::Off);
+          double_click_handler();
+          return;
+        }
+      }
+    }
+  }
+
+  led.SetMode(cw::led::LedType::Status, cw::led::LedMode::Off, 0,
+              cw::led::LedMode::Off);
+
+  if (n < cw::imu::kContinuousMinFrames) {
+    ILOGT("[main] gesture too short (%u frames), discarded\n", n);
+    return;
+  }
+
+  if (cw::gesture::RecorderCommit(buf, n)) {
+    // 绿色闪一下表示成功
+    led.SetMode(cw::led::LedType::Status, cw::led::LedMode::On,
+                cw::board::kLedColorReady, 500, cw::led::LedMode::Off);
+  } else {
+    // 红色闪一下表示失败/满
+    led.SetMode(cw::led::LedType::Status, cw::led::LedMode::On,
+                cw::board::kLedColorRecording, 500, cw::led::LedMode::Off);
+  }
+}
+#endif  // FEATURE_GESTURE_RECORDING
+
 void handle_button_press(void) {
+#if defined(FEATURE_GESTURE_RECORDING)
+  // GestureRecording 模式: 不走通用 IMU 采样路径, 直接用 DMP 四元数录制
+  if (kWorkMode == SystemWorkMode::GestureRecording) {
+    record_gesture_quaternion();
+    return;
+  }
+#endif
+
   // 这两个变量只是 "出参占位": capture_press_to_release 通过 IMU*& / uint16_t&
   // 引用回写真实值. 这里初始化为 nullptr/0 仅是良好习惯, 不会影响调用结果.
   cw::common::IMU* buf = nullptr;
@@ -417,7 +538,15 @@ void handle_button_press(void) {
 
   if (kWorkMode == SystemWorkMode::Application) {
     recognize_and_dispatch(buf, n);
-  } else {
+  }
+#if defined(FEATURE_GESTURE_RECORDING)
+  else if (kWorkMode == SystemWorkMode::GestureRecording) {
+    // GestureRecording 走独立的 DMP 采集路径, 不用 capture_press_to_release 的 IMU 数据
+    // 这个分支不应该到达这里 (应在 PressDown 时直接走 record_gesture_quaternion)
+    ILOGN("[main] unexpected: GestureRecording reached IMU post-process");
+  }
+#endif
+  else {
     dump_capture_for_training(buf, n);
   }
 }

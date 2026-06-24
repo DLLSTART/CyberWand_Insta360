@@ -83,6 +83,9 @@ public:
     /// 是否已与对端建立 GATT 连接
     bool IsConnected() const { return m_connected; }
 
+    /// 获取 BLE Server 指针 (供 OTA Service 注册用)
+    BLEServer* GetServer() const { return m_server; }
+
     // ===== 业务封装: 手势 -> 控制命令 =====
     // 全部接口的语义:
     //   返回 true  : 已通过 GATT NOTIFY 推送 (但不保证对端已收到)

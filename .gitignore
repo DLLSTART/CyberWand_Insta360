@@ -109,3 +109,6 @@ enclosure/scripts/
 # Windows NTFS 备用数据流 (Zone.Identifier / dlpfac 等), 全部忽略
 *:Zone.Identifier
 *:dlpfac
+
+# 脱敏映射表 (包含原始敏感值, 严禁推送)
+docs/DESENSITIZATION_MAP.md
